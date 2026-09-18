@@ -1,0 +1,46 @@
+# Packages installed by install.sh (official Arch repos only).
+# Blank lines and # comments are ignored.
+
+# --- build tools + libraries for dwm / st / dmenu ---
+base-devel
+libx11
+libxft
+libxinerama
+freetype2
+fontconfig
+
+# --- X server and the tools ~/.xinitrc and the bar use ---
+xorg-server
+xorg-xinit
+xorg-xrandr
+xorg-xrdb
+xorg-xset
+xorg-xsetroot
+dbus
+
+# --- fonts (dwm, st and dmenu all resolve to DejaVu Sans Mono) ---
+ttf-dejavu
+
+# --- audio: the volume readout and device pickers on the bar ---
+pipewire
+pipewire-pulse
+pipewire-alsa
+wireplumber
+libpulse
+
+# --- bar stats + helper scripts ---
+lm_sensors
+python
+
+# --- dark mode plumbing (GTK, Qt5/Qt6, xdg portal) ---
+xdg-desktop-portal
+xdg-desktop-portal-gtk
+dconf
+gsettings-desktop-schemas
+adwaita-icon-theme
+qt5ct
+qt6ct
+
+# --- apps ---
+firefox
+keepassxc

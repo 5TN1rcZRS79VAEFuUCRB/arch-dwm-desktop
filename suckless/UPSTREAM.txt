@@ -1,0 +1,9 @@
+These are vendored copies of the suckless.org tools, based on:
+  dwm    https://git.suckless.org/dwm    commit 44dbc68 (6.8)
+  st     https://git.suckless.org/st     commit 04ce0d6
+  dmenu  https://git.suckless.org/dmenu  commit 61e0072
+Local changes on top of upstream:
+  dwm    config.h: monochrome look, Mod+F10/F11/F12 + media keys for volume, Mod+O /
+         Mod+Shift+O for the output/input pickers, scroll/click actions on the status text
+  st     config.h
+  dmenu  dmenu.c: mouse support for vertical lists (click, hover, wheel, cancel); config.h
