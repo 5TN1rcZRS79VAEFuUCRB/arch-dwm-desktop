@@ -1,5 +1,8 @@
 xrdb -merge ~/.Xresources
 
+# Make sure ~/.local/bin (my launcher wrappers, e.g. keepassxc) comes before /usr/bin.
+case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac
+
 # Optional and machine specific: set your monitor's refresh rate (output names are in `xrandr`).
 # xrandr --output DP-0 --mode 3840x2160 --rate 240
 

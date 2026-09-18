@@ -43,7 +43,7 @@ of X and run `startx` again.
 | --- | --- |
 | dwm, st, dmenu (built from the sources in `suckless/`) | `~/.local/src/` and `/usr/local/bin/` |
 | `.xinitrc`, `.Xresources` (scaling, cursor), `.bash_profile` (starts X when you log in on tty1) | `~/` |
-| Bar script and audio script | `~/.local/bin/dwm-status.sh`, `~/.local/bin/dwm-audio` |
+| Bar, audio and tray scripts, plus a `keepassxc` launcher (slightly smaller text at high DPI) | `~/.local/bin/` |
 | GTK 3/4, Qt 5/6 and xdg-portal dark-mode config | `~/.config/` |
 | Firefox dark mode (`user.js`) | your Firefox profile directory |
 | KeePassXC dark theme | `~/.config/keepassxc/keepassxc.ini` (only that one setting) |
