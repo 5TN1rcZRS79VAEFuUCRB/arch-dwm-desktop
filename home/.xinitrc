@@ -14,6 +14,11 @@ xset dpms 600 600 600
 # plugin and Qt6 apps (OpenRGB) only load qt6ct; each skips the one it can't.
 export QT_QPA_PLATFORMTHEME="qt5ct:qt6ct"
 
+# Fullscreen SDL games (Garry's Mod, Source games, ...) minimize or leave fullscreen when they
+# lose focus, and under dwm every tag switch takes focus away, so they came back as a tiny
+# window. Tell SDL not to do that.
+export SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS=0
+
 # Make DISPLAY/XAUTHORITY visible to D-Bus-activated and systemd --user
 # services (xdg-desktop-portal in particular) -- a bare startx session has
 # no display manager to do this automatically.
