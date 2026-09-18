@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""
+dwm-tray: a minimal system tray for dwm, driven from dmenu.
+
+dwm has no tray, so apps that "minimize to tray" (Discord, Steam, ...) simply
+disappear. Modern apps announce their tray icon over D-Bus (the
+StatusNotifier protocol) to a "watcher" service. This script provides that
+service and a dmenu picker listing whatever has registered.
+
+  dwm-tray daemon   run the watcher/host (started from ~/.xinitrc)
+  dwm-tray menu     dmenu list of tray apps; choosing one restores it
+  dwm-tray list     print the entries (for testing)
+"""
+import subprocess
+import sys
+import warnings
+
+import gi
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+gi.require_version("Gio", "2.0")
+from gi.repository import Gio, GLib  # noqa: E402
+
+WATCHER = "org.kde.StatusNotifierWatcher"
+WATCHER_PATH = "/StatusNotifierWatcher"
+ITEM_IFACE = "org.kde.StatusNotifierItem"
+PROPS_IFACE = "org.freedesktop.DBus.Properties"
+
+WATCHER_XML = """
+<node>
+  <interface name="org.kde.StatusNotifierWatcher">
+    <method name="RegisterStatusNotifierItem"><arg type="s" name="service" direction="in"/></method>
+    <method name="RegisterStatusNotifierHost"><arg type="s" name="service" direction="in"/></method>
+    <property name="RegisteredStatusNotifierItems" type="as" access="read"/>
+    <property name="IsStatusNotifierHostRegistered" type="b" access="read"/>
+    <property name="ProtocolVersion" type="i" access="read"/>
+    <signal name="StatusNotifierItemRegistered"><arg type="s"/></signal>
+    <signal name="StatusNotifierItemUnregistered"><arg type="s"/></signal>
+    <signal name="StatusNotifierHostRegistered"/>
+  </interface>
+</node>
+"""
+
+DMENU = ["dmenu", "-i", "-l", "8", "-fn", "monospace:size=10",
+         "-nb", "#222222", "-nf", "#bbbbbb", "-sb", "#eeeeee", "-sf", "#000000"]
+
+
+def split_key(key):
+    """'busname/object/path' -> ('busname', '/object/path')"""
+    bus, _, rest = key.partition("/")
+    return bus, "/" + rest
+
+
+def run_daemon():
+    items = {}  # "bus/path" -> bus-name watch id
+    state = {}
+
+    def announce_change():
+        state["conn"].emit_signal(
+            None, WATCHER_PATH, PROPS_IFACE, "PropertiesChanged",
+            GLib.Variant("(sa{sv}as)", (
+                WATCHER,
+                {"RegisteredStatusNotifierItems": GLib.Variant("as", sorted(items))},
+                [])))
+
+    def drop(key):
+        if key in items:
+            Gio.bus_unwatch_name(items.pop(key))
+            state["conn"].emit_signal(None, WATCHER_PATH, WATCHER,
+                                      "StatusNotifierItemUnregistered",
+                                      GLib.Variant("(s)", (key,)))
+            announce_change()
+
+    def add(conn, bus, path):
+        key = bus + path
+        if key in items:
+            return
+        # the watch also fires "vanished" straight away if the name is not on the bus
+        items[key] = Gio.bus_watch_name_on_connection(
+            conn, bus, Gio.BusNameWatcherFlags.NONE, None,
+            lambda c, n, k=key: drop(k))
+        conn.emit_signal(None, WATCHER_PATH, WATCHER,
+                         "StatusNotifierItemRegistered", GLib.Variant("(s)", (key,)))
+        announce_change()
+
+    def on_method(conn, sender, path, iface, method, params, invocation):
+        if method == "RegisterStatusNotifierItem":
+            service = params.unpack()[0]
+            if service.startswith("/"):        # just an object path: the sender owns it
+                add(conn, sender, service)
+            elif "/" in service:               # "busname/object/path"
+                bus, opath = split_key(service)
+                add(conn, bus, opath)
+            else:                              # bare bus name: default object path
+                add(conn, service, "/StatusNotifierItem")
+        invocation.return_value(None)
+
+    def on_get(conn, sender, path, iface, prop):
+        if prop == "RegisteredStatusNotifierItems":
+            return GLib.Variant("as", sorted(items))
+        if prop == "IsStatusNotifierHostRegistered":
+            return GLib.Variant("b", True)     # we are the host
+        if prop == "ProtocolVersion":
+            return GLib.Variant("i", 0)
+        return None
+
+    node = Gio.DBusNodeInfo.new_for_xml(WATCHER_XML)
+
+    def on_bus(conn, name):
+        state["conn"] = conn
+        conn.register_object(WATCHER_PATH, node.interfaces[0], on_method, on_get, None)
+
+    def on_acquired(conn, name):
+        conn.emit_signal(None, WATCHER_PATH, WATCHER,
+                         "StatusNotifierHostRegistered", None)
+
+    def on_lost(conn, name):
+        sys.exit(0)  # another watcher already owns the name: nothing to do
+
+    Gio.bus_own_name(Gio.BusType.SESSION, WATCHER, Gio.BusNameOwnerFlags.NONE,
+                     on_bus, on_acquired, on_lost)
+    GLib.MainLoop().run()
+
+
+def session_bus():
+    return Gio.bus_get_sync(Gio.BusType.SESSION, None)
+
+
+def call(bus, dest, path, iface, method, args, reply_type):
+    return bus.call_sync(dest, path, iface, method, args,
+                         GLib.VariantType(reply_type) if reply_type else None,
+                         Gio.DBusCallFlags.NONE, 2000, None)
+
+
+def entries():
+    """[(label, bus, path)] for every registered tray item, or None if no watcher."""
+    bus = session_bus()
+    try:
+        reply = call(bus, WATCHER, WATCHER_PATH, PROPS_IFACE, "Get",
+                     GLib.Variant("(ss)", (WATCHER, "RegisteredStatusNotifierItems")), "(v)")
+    except GLib.Error:
+        return None
+    out, seen = [], {}
+    for key in reply.unpack()[0]:
+        ibus, ipath = split_key(key)
+        try:
+            props = call(bus, ibus, ipath, PROPS_IFACE, "GetAll",
+                         GLib.Variant("(s)", (ITEM_IFACE,)), "(a{sv})").unpack()[0]
+        except GLib.Error:
+            continue  # item went away between registration and now
+        label = props.get("Title") or props.get("Id") or ibus
+        if props.get("Status") == "NeedsAttention":
+            label += "  [needs attention]"
+        seen[label] = seen.get(label, 0) + 1
+        if seen[label] > 1:
+            label += f" ({seen[label]})"
+        out.append((label, ibus, ipath))
+    return out
+
+
+def activate(bus_name, path):
+    bus = session_bus()
+    for method in ("Activate", "SecondaryActivate"):
+        try:
+            call(bus, bus_name, path, ITEM_IFACE, method, GLib.Variant("(ii)", (0, 0)), None)
+            return
+        except GLib.Error as e:
+            last = e
+    print(f"dwm-tray: could not activate {bus_name}{path}: {last}", file=sys.stderr)
+
+
+def run_menu():
+    items = entries()
+    if items is None:
+        lines = ["(tray service is not running - start it with: dwm-tray daemon)"]
+    elif not items:
+        lines = ["(no apps are in the tray)"]
+    else:
+        lines = [label for label, _, _ in items]
+    choice = subprocess.run(DMENU + ["-p", "Tray"], input="\n".join(lines) + "\n",
+                            capture_output=True, text=True).stdout.strip()
+    for label, bus_name, path in items or []:
+        if label == choice:
+            activate(bus_name, path)
+
+
+def main():
+    mode = sys.argv[1] if len(sys.argv) > 1 else ""
+    if mode == "daemon":
+        run_daemon()
+    elif mode == "menu":
+        run_menu()
+    elif mode == "list":
+        items = entries()
+        print("\n".join(l for l, _, _ in items) if items else "(none)" if items is not None else "(no watcher)")
+    else:
+        print(__doc__, file=sys.stderr)
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

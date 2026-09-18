@@ -31,6 +31,7 @@ libpulse
 # --- bar stats + helper scripts ---
 lm_sensors
 python
+python-gobject
 
 # --- dark mode plumbing (GTK, Qt5/Qt6, xdg portal) ---
 xdg-desktop-portal

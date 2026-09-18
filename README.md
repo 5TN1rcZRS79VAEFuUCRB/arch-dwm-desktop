@@ -72,6 +72,7 @@ Packages are listed in `packages.txt`.
 | **Volume up / down / mute** | `Mod+F12` / `Mod+F11` / `Mod+F10` (or the keyboard's media keys) |
 | **Mic up / down / mute** | `Mod+Shift+F12` / `Mod+Shift+F11` / `Mod+Shift+F10` |
 | **Output device picker / input device picker** | `Mod+O` / `Mod+Shift+O` |
+| **Tray apps menu** | `Mod+Shift+T`, or right-click the window title in the bar |
 
 On the status bar text itself:
 
@@ -86,12 +87,25 @@ On the status bar text itself:
 Inside a picker menu, click an entry to select it, scroll to move the highlight, and right-click
 or click outside to cancel. The bottom entry jumps between the output and input pickers.
 
+## System tray
+
+dwm has no tray, so apps that "minimize to tray" (Discord, Steam, ...) would just vanish. `dwm-tray`
+runs a small StatusNotifier service (started from `.xinitrc`) that those apps register with.
+Press `Mod+Shift+T` (or right-click the window title in the bar) to get a dmenu list of the apps
+in the tray; choosing one brings it back.
+
+Apps register when they start, so launch them after logging in to X. An app that was already
+running before the tray service started may not appear until it is restarted. Apps that only
+support the old-style tray (not StatusNotifier) will not show up.
+
 ## Not included on purpose
 
 * **NVIDIA drivers.** The right package depends on your GPU and kernel: install it yourself
   (for example `sudo pacman -S nvidia-open`). The bar's GPU readout appears automatically once
   `nvidia-smi` works, and is left out on other hardware.
 * **GPU/RGB lighting control** (hardware specific).
+* **Monitor refresh rate and G-SYNC.** These depend on the monitor and output name, so `.xinitrc`
+  only has a commented-out `xrandr` example to edit.
 * **All server software** (Jellyfin, Radarr/Sonarr, Docker, Cloudflare and so on) and any
   passwords or API keys.
 
