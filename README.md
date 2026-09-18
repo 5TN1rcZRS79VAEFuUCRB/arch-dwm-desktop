@@ -15,11 +15,8 @@ cd arch-desktop
 ./install.sh
 ```
 
-Then log in on a **text console** (not inside another graphical session) and run:
-
-```sh
-startx
-```
+Then log in on the first **text console** (Ctrl+Alt+F1). X starts automatically after login. If it
+doesn't (other console, or you exited X), run `startx`.
 
 If the repo is private, `git clone` will ask for GitHub credentials. The easy way is
 `sudo pacman -S --needed github-cli && gh auth login && gh repo clone <your-github-user>/arch-desktop`.
@@ -45,7 +42,7 @@ of X and run `startx` again.
 | Piece | Where it goes |
 | --- | --- |
 | dwm, st, dmenu (built from the sources in `suckless/`) | `~/.local/src/` and `/usr/local/bin/` |
-| `.xinitrc`, `.Xresources` (scaling, cursor) | `~/` |
+| `.xinitrc`, `.Xresources` (scaling, cursor), `.bash_profile` (starts X when you log in on tty1) | `~/` |
 | Bar script and audio script | `~/.local/bin/dwm-status.sh`, `~/.local/bin/dwm-audio` |
 | GTK 3/4, Qt 5/6 and xdg-portal dark-mode config | `~/.config/` |
 | Firefox dark mode (`user.js`) | your Firefox profile directory |

@@ -225,7 +225,8 @@ say "Done"
 cat <<EOF
 
 Next steps:
-  1. Log in on a text console (not inside another graphical session) and run:  startx
+  1. Log out, then log in on the first text console (Ctrl+Alt+F1): X starts automatically.
+     (On another console, or after exiting X, run:  startx)
   2. Mod is the Super/Windows key. Mod+Shift+Enter opens a terminal, Mod+P a launcher.
      See README.md for the audio keys and the full list.
   3. NVIDIA card? Install the driver yourself first (e.g. 'sudo pacman -S nvidia-open'),
