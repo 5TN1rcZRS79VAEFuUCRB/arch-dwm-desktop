@@ -6,7 +6,9 @@
 # The clock ticks every second; the heavier stats (CPU/GPU/RAM) are sampled
 # in the background every 2s and cached, so the clock never waits on them.
 
-CACHE=/tmp/dwm-status-cache
+# Not a fixed name in world-writable /tmp: another local user could pre-create it as a symlink.
+CACHE="${XDG_RUNTIME_DIR:-$HOME/.cache}/dwm-status-cache"
+mkdir -p "$(dirname "$CACHE")"
 
 cpu_usage() {
 	read -r _ a b c idle _ < /proc/stat
@@ -37,7 +39,11 @@ ram_usage() {
 	free -h | awk '/^Mem:/{print $3"/"$2}'
 }
 
+# Off by default: this ran nvidia-smi about twice a second, all day, including while the monitor
+# slept, and it competes with the NVIDIA driver during monitor sleep/wake. Set DWM_STATUS_GPU=1
+# (e.g. in ~/.xinitrc) to bring the GPU readout back.
 gpu_stats() {
+	[ "${DWM_STATUS_GPU:-0}" = 1 ] || return 0
 	nvidia-smi --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits 2>/dev/null | tr -d ' '
 }
 

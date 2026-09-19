@@ -15,7 +15,8 @@ STEP=5
 refresh_bar() {
 	local pid
 	pid="$(cat "${XDG_RUNTIME_DIR:-/tmp}/dwm-status.pid" 2>/dev/null)" || return 0
-	[ -n "$pid" ] && kill -USR1 "$pid" 2>/dev/null
+	# Only signal the bar script itself: a stale pid file could name an unrelated process now (USR1 kills by default).
+	[ -n "$pid" ] && grep -qa dwm-status "/proc/$pid/cmdline" 2>/dev/null && kill -USR1 "$pid" 2>/dev/null
 	return 0
 }
 

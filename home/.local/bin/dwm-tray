@@ -85,15 +85,18 @@ def run_daemon():
         announce_change()
 
     def on_method(conn, sender, path, iface, method, params, invocation):
-        if method == "RegisterStatusNotifierItem":
-            service = params.unpack()[0]
-            if service.startswith("/"):        # just an object path: the sender owns it
-                add(conn, sender, service)
-            elif "/" in service:               # "busname/object/path"
-                bus, opath = split_key(service)
-                add(conn, bus, opath)
-            else:                              # bare bus name: default object path
-                add(conn, service, "/StatusNotifierItem")
+        try:
+            if method == "RegisterStatusNotifierItem":
+                service = params.unpack()[0]
+                if service.startswith("/"):        # just an object path: the sender owns it
+                    add(conn, sender, service)
+                elif "/" in service:               # "busname/object/path"
+                    bus, opath = split_key(service)
+                    add(conn, bus, opath)
+                else:                              # bare bus name: default object path
+                    add(conn, service, "/StatusNotifierItem")
+        except Exception as e:                     # a bad name from one app must not wedge the service
+            print(f"dwm-tray: ignoring bad registration: {e}", file=sys.stderr)
         invocation.return_value(None)
 
     def on_get(conn, sender, path, iface, prop):
@@ -149,7 +152,8 @@ def entries():
                          GLib.Variant("(s)", (ITEM_IFACE,)), "(a{sv})").unpack()[0]
         except GLib.Error:
             continue  # item went away between registration and now
-        label = props.get("Title") or props.get("Id") or ibus
+        # Apps supply these strings: force plain one-line text so a odd value can't break the menu.
+        label = " ".join(str(props.get("Title") or props.get("Id") or ibus).split())
         if props.get("Status") == "NeedsAttention":
             label += "  [needs attention]"
         seen[label] = seen.get(label, 0) + 1

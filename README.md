@@ -98,8 +98,9 @@ support the old-style tray (not StatusNotifier) will not show up.
 ## Not included on purpose
 
 * **NVIDIA drivers.** The right package depends on your GPU and kernel: install it yourself
-  (for example `sudo pacman -S nvidia-open`). The bar's GPU readout appears automatically once
-  `nvidia-smi` works, and is left out on other hardware.
+  (for example `sudo pacman -S nvidia-open`). The bar's GPU readout is off by default (polling
+  `nvidia-smi` constantly can upset the driver while the monitor sleeps); turn it on with
+  `export DWM_STATUS_GPU=1` in `~/.xinitrc` once `nvidia-smi` works.
 * **GPU/RGB lighting control** (hardware specific).
 * **Monitor refresh rate and G-SYNC.** These depend on the monitor and output name, so `.xinitrc`
   only has a commented-out `xrandr` example to edit.
