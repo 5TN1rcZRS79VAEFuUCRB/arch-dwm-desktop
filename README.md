@@ -89,7 +89,9 @@ or click outside to cancel. The bottom entry jumps between the output and input 
 dwm has no tray, so apps that "minimize to tray" (Discord, Steam, ...) would just vanish. `dwm-tray`
 runs a small StatusNotifier service (started from `.xinitrc`) that those apps register with.
 Press `Mod+Shift+T` (or right-click the window title in the bar) to get a dmenu list of the apps
-in the tray; choosing one brings it back.
+in the tray; choosing one brings it back. Every app is also listed as `quit: <app>`: choosing that
+closes it for real (an app's window close button usually just hides it back to the tray). It clicks the
+Quit/Exit entry in the app's tray menu, or sends the app a normal terminate signal if it has none.
 
 Apps register when they start, so launch them after logging in to X. An app that was already
 running before the tray service started may not appear until it is restarted. Apps that only

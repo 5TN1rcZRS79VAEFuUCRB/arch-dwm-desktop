@@ -8,9 +8,12 @@ StatusNotifier protocol) to a "watcher" service. This script provides that
 service and a dmenu picker listing whatever has registered.
 
   dwm-tray daemon   run the watcher/host (started from ~/.xinitrc)
-  dwm-tray menu     dmenu list of tray apps; choosing one restores it
+  dwm-tray menu     dmenu list of tray apps; choosing one restores it, "quit: <app>" closes it
   dwm-tray list     print the entries (for testing)
 """
+import os
+import re
+import signal
 import subprocess
 import sys
 import warnings
@@ -42,7 +45,7 @@ WATCHER_XML = """
 </node>
 """
 
-DMENU = ["dmenu", "-i", "-l", "8", "-fn", "monospace:size=10",
+DMENU = ["dmenu", "-i", "-l", "12", "-fn", "monospace:size=10",
          "-nb", "#222222", "-nf", "#bbbbbb", "-sb", "#eeeeee", "-sf", "#000000"]
 
 
@@ -174,6 +177,44 @@ def activate(bus_name, path):
     print(f"dwm-tray: could not activate {bus_name}{path}: {last}", file=sys.stderr)
 
 
+QUIT_LABEL = re.compile(r"^(quit|exit)\b", re.I)
+QUIT_PREFIX = "quit: "
+
+
+def quit_app(bus_name, path):
+    """Really close the app behind a tray icon (its window's close button only hides it to the tray).
+
+    The tray protocol has no "quit" call, but almost every app's tray menu has a Quit/Exit entry,
+    so click that. Apps without one get a polite SIGTERM.
+    """
+    bus = session_bus()
+    try:
+        props = call(bus, bus_name, path, PROPS_IFACE, "GetAll",
+                     GLib.Variant("(s)", (ITEM_IFACE,)), "(a{sv})").unpack()[0]
+        menu = props.get("Menu")
+        if menu:
+            layout = call(bus, bus_name, menu, "com.canonical.dbusmenu", "GetLayout",
+                          GLib.Variant("(iias)", (0, -1, [])), "(u(ia{sv}av))").unpack()[1]
+            stack = [layout]
+            while stack:
+                item_id, item_props, children = stack.pop()
+                label = str(item_props.get("label") or "").replace("_", "").replace("&", "").strip()
+                if QUIT_LABEL.match(label) and item_props.get("enabled", True):
+                    call(bus, bus_name, menu, "com.canonical.dbusmenu", "Event",
+                         GLib.Variant("(isvu)", (item_id, "clicked", GLib.Variant("i", 0), 0)), None)
+                    return
+                stack.extend(children)
+    except GLib.Error as e:
+        print(f"dwm-tray: menu quit failed for {bus_name}: {e}", file=sys.stderr)
+    try:
+        pid = call(bus, "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+                   "GetConnectionUnixProcessID", GLib.Variant("(s)", (bus_name,)), "(u)").unpack()[0]
+        if pid > 1 and pid != os.getpid():
+            os.kill(pid, signal.SIGTERM)
+    except (GLib.Error, OSError) as e:
+        print(f"dwm-tray: could not close {bus_name}: {e}", file=sys.stderr)
+
+
 def run_menu():
     items = entries()
     if items is None:
@@ -181,12 +222,15 @@ def run_menu():
     elif not items:
         lines = ["(no apps are in the tray)"]
     else:
-        lines = [label for label, _, _ in items]
+        # Choosing an app restores it; the "quit:" lines below close it for real.
+        lines = [label for label, _, _ in items] + [QUIT_PREFIX + label for label, _, _ in items]
     choice = subprocess.run(DMENU + ["-p", "Tray"], input="\n".join(lines) + "\n",
                             capture_output=True, text=True).stdout.strip()
     for label, bus_name, path in items or []:
-        if label == choice:
+        if choice == label:
             activate(bus_name, path)
+        elif choice == QUIT_PREFIX + label:
+            quit_app(bus_name, path)
 
 
 def main():
