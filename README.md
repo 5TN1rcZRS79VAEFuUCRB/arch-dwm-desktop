@@ -43,7 +43,7 @@ of X and run `startx` again.
 | --- | --- |
 | dwm, st, dmenu (built from the sources in `suckless/`) | `~/.local/src/` and `/usr/local/bin/` |
 | `.xinitrc`, `.Xresources` (scaling, cursor), `.bash_profile` (starts X when you log in on tty1) | `~/` |
-| Bar, audio and tray scripts, plus a `keepassxc` launcher (slightly smaller text at high DPI) | `~/.local/bin/` |
+| Bar, audio and tray scripts, the idle screen-off (`dwm-blank`), plus a `keepassxc` launcher (slightly smaller text at high DPI) | `~/.local/bin/` |
 | GTK 3/4, Qt 5/6 and xdg-portal dark-mode config | `~/.config/` |
 | Firefox dark mode (`user.js`) | your Firefox profile directory |
 | KeePassXC dark theme | `~/.config/keepassxc/keepassxc.ini` (only that one setting) |
@@ -94,6 +94,17 @@ in the tray; choosing one brings it back.
 Apps register when they start, so launch them after logging in to X. An app that was already
 running before the tray service started may not appear until it is restarted. Apps that only
 support the old-style tray (not StatusNotifier) will not show up.
+
+## Idle screen-off (no DPMS)
+
+After 10 minutes idle the screen goes black, but the monitor is **not** put to sleep: `dwm-blank` sets every
+output's brightness to 0 while the X screen saver is active and restores it the instant you touch a key or the
+mouse. DPMS is switched off in `.xinitrc` on purpose. With some monitors on NVIDIA + DisplayPort (seen with a
+Samsung Odyssey G8 at 4K 240 Hz, whose compressed DSC link does not re-train after a long sleep), waking from
+DPMS sleep can leave "monitor on, no picture" until you reboot. Not cutting the signal avoids that. If your setup
+has no such problem and you want real monitor sleep, replace the `xset -dpms` block in `.xinitrc` with
+`xset s 600 600` and `xset dpms 600 600 600`, and stop starting `dwm-blank`. Video players that suppress the
+screen saver are honoured, because `dwm-blank` follows the X server's own saver state.
 
 ## Not included on purpose
 

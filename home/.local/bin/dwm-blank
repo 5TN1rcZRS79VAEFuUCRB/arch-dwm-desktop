@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+"""
+dwm-blank: the idle "screen off", without DPMS. Started from ~/.xinitrc.
+
+When the X screen saver activates (after the `xset s` timeout, and never while an app such as a video
+player is suppressing it) every output's brightness is turned to 0 while the video signal keeps flowing.
+Any keyboard/mouse activity switches the saver off again and the brightness is restored at once.
+
+Why not DPMS: a monitor that has fully powered down its DisplayPort link can fail to bring the picture back.
+Seen with a Samsung Odyssey G8 at 4K 240 Hz on an NVIDIA GPU, where the compressed (DSC) DisplayPort stream
+does not re-train after a long sleep. Never cutting the signal avoids that whole class of problem.
+
+Needs the X server's own blanking off (see ~/.xinitrc): `xset -dpms`, `xset s noblank`, `xset s noexpose`.
+"""
+import ctypes
+import ctypes.util
+import signal
+import subprocess
+import sys
+import time
+
+POLL = 0.25  # seconds; also the worst-case delay before the picture returns after you touch a key
+
+x11 = ctypes.CDLL(ctypes.util.find_library("X11"))
+xss = ctypes.CDLL(ctypes.util.find_library("Xss"))
+
+
+class Info(ctypes.Structure):
+    _fields_ = [("window", ctypes.c_ulong), ("state", ctypes.c_int), ("kind", ctypes.c_int),
+                ("til_or_since", ctypes.c_ulong), ("idle", ctypes.c_ulong), ("eventMask", ctypes.c_ulong)]
+
+
+x11.XOpenDisplay.restype = ctypes.c_void_p
+x11.XDefaultRootWindow.restype = ctypes.c_ulong
+xss.XScreenSaverAllocInfo.restype = ctypes.POINTER(Info)
+
+dpy = x11.XOpenDisplay(None)
+if not dpy:
+    sys.exit("dwm-blank: cannot open the X display")
+root = x11.XDefaultRootWindow(ctypes.c_void_p(dpy))
+info = xss.XScreenSaverAllocInfo()
+outputs = []
+
+
+def saver_on():
+    ok = xss.XScreenSaverQueryInfo(ctypes.c_void_p(dpy), ctypes.c_ulong(root), info)
+    if not ok:
+        raise SystemExit(0)  # X went away
+    return info.contents.state == 1  # ScreenSaverOn
+
+
+def connected_outputs():
+    out = subprocess.run(["xrandr", "--current"], capture_output=True, text=True).stdout
+    return [line.split()[0] for line in out.splitlines() if " connected" in line]
+
+
+def set_brightness(value):
+    for o in outputs:
+        subprocess.run(["xrandr", "--output", o, "--brightness", str(value)], capture_output=True)
+
+
+def restore(*_):
+    if outputs:
+        set_brightness(1)
+    sys.exit(0)
+
+
+for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+    signal.signal(sig, restore)
+
+blanked = False
+while True:
+    on = saver_on()
+    if on and not blanked:
+        outputs = connected_outputs()
+        set_brightness(0)
+        blanked = True
+    elif blanked and not on:
+        set_brightness(1)
+        blanked = False
+    time.sleep(POLL)

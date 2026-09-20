@@ -28,6 +28,9 @@ pipewire-alsa
 wireplumber
 libpulse
 
+# --- idle screen blanking (see dwm-blank)
+libxss
+
 # --- bar stats + helper scripts ---
 lm_sensors
 python
