@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+#
+# dwm-shot: take a screenshot, save it to ~/Pictures/Screenshots and copy it to the clipboard.
+#
+#   dwm-shot          the whole screen
+#   dwm-shot area     drag a rectangle (click a window to grab just it; Esc cancels)
+#
+# Bound to Print and Shift+Print in dwm's config.h.
+set -u
+
+dir="${XDG_PICTURES_DIR:-$HOME/Pictures}/Screenshots"
+mkdir -p "$dir"
+file="$dir/screenshot-$(date +%F_%H-%M-%S).png"
+
+case "${1:-full}" in
+	area) maim --select --hidecursor --quiet "$file" ;;
+	*)    maim --hidecursor --quiet "$file" ;;
+esac || { rm -f "$file"; exit 0; }   # cancelled selection: keep nothing
+
+[ -s "$file" ] || { rm -f "$file"; exit 1; }
+xclip -selection clipboard -t image/png -i "$file" 2>/dev/null
+
+echo "$file"

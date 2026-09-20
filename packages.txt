@@ -31,6 +31,11 @@ libpulse
 # --- idle screen blanking (see dwm-blank)
 libxss
 
+# --- screenshots (dwm-shot: Print / Shift+Print)
+maim
+slop
+xclip
+
 # --- bar stats + helper scripts ---
 lm_sensors
 python

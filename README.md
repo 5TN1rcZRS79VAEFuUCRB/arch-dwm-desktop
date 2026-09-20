@@ -97,6 +97,14 @@ Apps register when they start, so launch them after logging in to X. An app that
 running before the tray service started may not appear until it is restarted. Apps that only
 support the old-style tray (not StatusNotifier) will not show up.
 
+## Screenshots
+
+`Print` saves a screenshot of the whole screen and `Shift+Print` lets you drag a rectangle (click a
+window to grab just it, `Esc` cancels). Both write a PNG to `~/Pictures/Screenshots/` and copy it
+to the clipboard, so you can paste it straight into a chat. It is the `dwm-shot` script, which uses
+`maim`, `slop` and `xclip`. The keys are part of dwm, so they work after dwm is rebuilt and restarted;
+until then, run `dwm-shot` from dmenu (`Mod+P`).
+
 ## Idle screen-off (no DPMS)
 
 After 10 minutes idle the screen goes black, but the monitor is **not** put to sleep: `dwm-blank` sets every

@@ -73,6 +73,8 @@ static const char *micdowncmd[] = { AUDIO, "vol", "micdown", NULL };
 static const char *outmenucmd[] = { AUDIO, "menu", "out",    NULL };
 static const char *inmenucmd[]  = { AUDIO, "menu", "in",     NULL };
 static const char *traymenucmd[] = { "/home/USER/.local/bin/dwm-tray", "menu", NULL };
+static const char *shotcmd[]     = { "/home/USER/.local/bin/dwm-shot", NULL };
+static const char *shotareacmd[] = { "/home/USER/.local/bin/dwm-shot", "area", NULL };
 
 static const Key keys[] = {
 	/* modifier                     key        function        argument */
@@ -108,6 +110,8 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_o,      spawn,          {.v = outmenucmd } },
 	{ MODKEY|ShiftMask,             XK_o,      spawn,          {.v = inmenucmd } },
 	{ MODKEY|ShiftMask,             XK_t,      spawn,          {.v = traymenucmd } },
+	{ 0,                            XK_Print,  spawn,          {.v = shotcmd } },
+	{ ShiftMask,                    XK_Print,  spawn,          {.v = shotareacmd } },
 	{ 0,                            XF86XK_AudioRaiseVolume, spawn, {.v = volupcmd } },
 	{ 0,                            XF86XK_AudioLowerVolume, spawn, {.v = voldowncmd } },
 	{ 0,                            XF86XK_AudioMute,        spawn, {.v = volmutecmd } },
