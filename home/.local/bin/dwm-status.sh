@@ -69,24 +69,14 @@ battery_text() {
 	else echo "BAT ${cap}%"; fi
 }
 
-# Name of the Wi-Fi network in use (blank when on a wired link or offline). Switch networks with Mod+N (dwm-net).
-wifi_text() {
-	command -v nmcli >/dev/null || return 0
-	nmcli -t -f TYPE,STATE,CONNECTION device 2>/dev/null | sed -n 's/^wifi:connected:\(.*\)$/\1/p' | head -n1 |
-		sed 's/\\:/:/g' | tr -d '|\n\r\t'
-}
-
 sampler() {
-	local n=0 net=""
 	while true; do
 		cpu="$(cpu_usage)"
 		ctemp="$(cpu_temp)"
 		ram="$(ram_usage)"
 		gpu="$(gpu_stats)"
 		bat="$(battery_text)"
-		[ $((n % 5)) -eq 0 ] && net="$(wifi_text)"     # every ~10 s: the name rarely changes
-		n=$((n + 1))
-		echo "${cpu}|${ctemp}|${ram}|${gpu}|${bat}|${net}" > "$CACHE.tmp"
+		echo "${cpu}|${ctemp}|${ram}|${gpu}|${bat}" > "$CACHE.tmp"
 		mv "$CACHE.tmp" "$CACHE"
 	done
 }
@@ -101,7 +91,7 @@ echo $$ > "${XDG_RUNTIME_DIR:-/tmp}/dwm-status.pid"
 trap : USR1
 
 while true; do
-	IFS='|' read -r cpu ctemp ram gpu bat net < "$CACHE" 2>/dev/null
+	IFS='|' read -r cpu ctemp ram gpu bat < "$CACHE" 2>/dev/null
 	IFS=',' read -r gpu_util gpu_temp <<< "$gpu"
 	clock="$(date '+%a %b %d %I:%M:%S %p')"
 	vol="$("$HOME/.local/bin/dwm-audio" status 2>/dev/null)"
@@ -111,6 +101,6 @@ while true; do
 	[ -n "$ctemp" ] && stats+=" ${ctemp}C"
 	[ -n "$gpu_util" ] && stats+=" | GPU ${gpu_util}% ${gpu_temp}C"
 
-	xsetroot -name "${stats} | RAM ${ram:-?}${net:+ | WIFI $net}${bat:+ | $bat} | ${vol:-VOL ?} | ${clock} "
+	xsetroot -name "${stats} | RAM ${ram:-?}${bat:+ | $bat} | ${vol:-VOL ?} | ${clock} "
 	sleep 1 & wait $!
 done

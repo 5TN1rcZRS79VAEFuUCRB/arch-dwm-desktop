@@ -107,8 +107,8 @@ support the old-style tray (not StatusNotifier) will not show up.
 `saved`/`connected` tags), your wired and VPN connections, and a few actions: turn Wi-Fi on or off,
 rescan, forget a saved network, and `nmtui` for anything unusual such as a hidden network.
 Choose a network to connect. A new network that needs a password opens a small terminal that asks for
-it, so the password is never shown on screen. The bar shows the Wi-Fi network you are on
-(`WIFI name`); it stays blank on a wired link.
+it, so the password is never shown on screen. The bar does not show the network name; the picker's
+first line says what you are connected to.
 
 This needs **NetworkManager**. When installing Arch with `archinstall`, choose *NetworkManager* under
 network configuration (the installer adds the package but does not switch your network setup over).
