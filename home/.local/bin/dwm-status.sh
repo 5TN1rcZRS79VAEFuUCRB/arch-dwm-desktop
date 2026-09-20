@@ -47,13 +47,46 @@ gpu_stats() {
 	nvidia-smi --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits 2>/dev/null | tr -d ' '
 }
 
+# Laptops only (prints nothing without a battery): "BAT 87%", with a + while charging, an = when
+# held at a charge limit, and a ! when it is low. Details and power profiles: Mod+Shift+P (dwm-power).
+battery_text() {
+	local dir="${DWM_POWER_SUPPLY_DIR:-/sys/class/power_supply}" b cap status total=0 count=0 charging=0 holding=0 discharging=0
+	for b in "$dir"/BAT*; do
+		[ -r "$b/capacity" ] && [ -r "$b/status" ] || continue
+		cap="$(<"$b/capacity")"; status="$(<"$b/status")"
+		total=$((total + cap)); count=$((count + 1))
+		case "$status" in
+			Charging) charging=1 ;;
+			"Not charging") holding=1 ;;
+			Discharging) discharging=1 ;;
+		esac
+	done
+	[ "$count" -gt 0 ] || return 0
+	cap=$((total / count))
+	if [ "$charging" = 1 ]; then echo "BAT ${cap}%+"
+	elif [ "$discharging" = 1 ] && [ "$cap" -le 15 ]; then echo "BAT ${cap}%!"
+	elif [ "$holding" = 1 ]; then echo "BAT ${cap}%="
+	else echo "BAT ${cap}%"; fi
+}
+
+# Name of the Wi-Fi network in use (blank when on a wired link or offline). Switch networks with Mod+N (dwm-net).
+wifi_text() {
+	command -v nmcli >/dev/null || return 0
+	nmcli -t -f TYPE,STATE,CONNECTION device 2>/dev/null | sed -n 's/^wifi:connected:\(.*\)$/\1/p' | head -n1 |
+		sed 's/\\:/:/g' | tr -d '|\n\r\t'
+}
+
 sampler() {
+	local n=0 net=""
 	while true; do
 		cpu="$(cpu_usage)"
 		ctemp="$(cpu_temp)"
 		ram="$(ram_usage)"
 		gpu="$(gpu_stats)"
-		echo "${cpu}|${ctemp}|${ram}|${gpu}" > "$CACHE.tmp"
+		bat="$(battery_text)"
+		[ $((n % 5)) -eq 0 ] && net="$(wifi_text)"     # every ~10 s: the name rarely changes
+		n=$((n + 1))
+		echo "${cpu}|${ctemp}|${ram}|${gpu}|${bat}|${net}" > "$CACHE.tmp"
 		mv "$CACHE.tmp" "$CACHE"
 	done
 }
@@ -68,7 +101,7 @@ echo $$ > "${XDG_RUNTIME_DIR:-/tmp}/dwm-status.pid"
 trap : USR1
 
 while true; do
-	IFS='|' read -r cpu ctemp ram gpu < "$CACHE" 2>/dev/null
+	IFS='|' read -r cpu ctemp ram gpu bat net < "$CACHE" 2>/dev/null
 	IFS=',' read -r gpu_util gpu_temp <<< "$gpu"
 	clock="$(date '+%a %b %d %I:%M:%S %p')"
 	vol="$("$HOME/.local/bin/dwm-audio" status 2>/dev/null)"
@@ -78,6 +111,6 @@ while true; do
 	[ -n "$ctemp" ] && stats+=" ${ctemp}C"
 	[ -n "$gpu_util" ] && stats+=" | GPU ${gpu_util}% ${gpu_temp}C"
 
-	xsetroot -name "${stats} | RAM ${ram:-?} | ${vol:-VOL ?} | ${clock} "
+	xsetroot -name "${stats} | RAM ${ram:-?}${net:+ | WIFI $net}${bat:+ | $bat} | ${vol:-VOL ?} | ${clock} "
 	sleep 1 & wait $!
 done

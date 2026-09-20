@@ -43,9 +43,10 @@ of X and run `startx` again.
 | --- | --- |
 | dwm, st, dmenu (built from the sources in `suckless/`) | `~/.local/src/` and `/usr/local/bin/` |
 | `.xinitrc`, `.Xresources` (scaling, cursor), `.bash_profile` (starts X when you log in on tty1) | `~/` |
-| Bar, audio and tray scripts, the idle screen-off (`dwm-blank`), plus a `keepassxc` launcher (slightly smaller text at high DPI) | `~/.local/bin/` |
+| Bar, audio, tray, network (`dwm-net`), battery (`dwm-power`) and screenshot scripts, the idle screen-off (`dwm-blank`), plus a `keepassxc` launcher (slightly smaller text at high DPI) | `~/.local/bin/` |
 | GTK 3/4, Qt 5/6 and xdg-portal dark-mode config | `~/.config/` |
-| Firefox dark mode (`user.js`) | your Firefox profile directory |
+| Firefox settings: dark mode, privacy, no AI or sponsored content (`user.js`) | your Firefox profile directory |
+| Firefox extension: uBlock Origin, installed by a policy (`policies.json`) | `/etc/firefox/policies/` (needs sudo) |
 | KeePassXC dark theme | `~/.config/keepassxc/keepassxc.ini` (only that one setting) |
 | Desktop-wide "prefer dark" | dconf (`org.gnome.desktop.interface`) |
 
@@ -70,6 +71,9 @@ Packages are listed in `packages.txt`.
 | **Mic up / down / mute** | `Mod+Shift+F12` / `Mod+Shift+F11` / `Mod+Shift+F10` |
 | **Output device picker / input device picker** | `Mod+O` / `Mod+Shift+O` |
 | **Tray apps menu** | `Mod+Shift+T`, or right-click the window title in the bar |
+| **Network picker** | `Mod+N` |
+| **Battery details / power profile** | `Mod+Shift+P` |
+| **Screenshot: whole screen / drag an area** | `Print` / `Shift+Print` |
 
 On the status bar text itself:
 
@@ -96,6 +100,28 @@ Quit/Exit entry in the app's tray menu, or sends the app a normal terminate sign
 Apps register when they start, so launch them after logging in to X. An app that was already
 running before the tray service started may not appear until it is restarted. Apps that only
 support the old-style tray (not StatusNotifier) will not show up.
+
+## Network picker
+
+`Mod+N` opens a dmenu list of the Wi-Fi networks in range (strongest first, with signal, security and
+`saved`/`connected` tags), your wired and VPN connections, and a few actions: turn Wi-Fi on or off,
+rescan, forget a saved network, and `nmtui` for anything unusual such as a hidden network.
+Choose a network to connect. A new network that needs a password opens a small terminal that asks for
+it, so the password is never shown on screen. The bar shows the Wi-Fi network you are on
+(`WIFI name`); it stays blank on a wired link.
+
+This needs **NetworkManager**. When installing Arch with `archinstall`, choose *NetworkManager* under
+network configuration (the installer adds the package but does not switch your network setup over).
+Turn it on with `sudo systemctl enable --now NetworkManager`; join Wi-Fi the first time with
+`nmtui` if you have no other way online.
+
+## Battery (laptops)
+
+On a machine with a battery the bar shows `BAT 87%`, with `+` while charging, `=` when the charge
+limit is holding it, and `!` when it is at 15% or below. Nothing is shown on a desktop.
+`Mod+Shift+P` opens a dmenu list with the time left (or until full), power draw, battery health,
+any charge limit and, if `power-profiles-daemon` is installed, the power profile, which you can
+switch by choosing one.
 
 ## Screenshots
 

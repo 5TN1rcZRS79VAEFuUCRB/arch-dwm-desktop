@@ -31,6 +31,9 @@ libpulse
 # --- idle screen blanking (see dwm-blank)
 libxss
 
+# --- network picker (dwm-net, Mod+N); the laptop's battery and power profile need no package here
+networkmanager
+
 # --- screenshots (dwm-shot: Print / Shift+Print)
 maim
 slop

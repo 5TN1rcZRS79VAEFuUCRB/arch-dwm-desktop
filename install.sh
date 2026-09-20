@@ -142,6 +142,14 @@ if command -v firefox >/dev/null; then
 		warn "could not find/create a Firefox profile. Start Firefox once, close it, then run:"
 		warn "  ./install.sh --no-packages --no-build"
 	fi
+	# Extensions (uBlock Origin) come from a system-wide Firefox policy, so they are installed
+	# automatically the next time Firefox starts. Needs root because it lives in /etc.
+	POLICY=/etc/firefox/policies/policies.json
+	if ! cmp -s firefox/policies.json "$POLICY" 2>/dev/null; then
+		[ -e "$POLICY" ] && sudo cp -a "$POLICY" "$POLICY.bak-$(date +%Y%m%d-%H%M%S)"
+		sudo install -Dm644 firefox/policies.json "$POLICY"
+		echo "Installed Firefox extension policy ($POLICY)"
+	fi
 else
 	warn "firefox is not installed; skipping its settings"
 fi
