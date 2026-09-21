@@ -200,8 +200,6 @@ if [ "$DO_BUILD" -eq 1 ]; then
 		[ -e "$dest/config.h" ] && backup_if_different "$dest/config.h" "suckless/$t/config.h"
 		cp -a "suckless/$t/." "$dest/"
 	done
-	# dwm's config.h calls the audio script by absolute path; point it at this user's home
-	sed -i "s#/home/USER#$HOME#g" "$HOME/.local/src/dwm/config.h"
 	for t in dwm st dmenu; do
 		make -C "$HOME/.local/src/$t"
 		sudo make -C "$HOME/.local/src/$t" install

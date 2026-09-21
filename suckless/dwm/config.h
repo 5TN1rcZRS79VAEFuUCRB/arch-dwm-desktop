@@ -61,9 +61,10 @@ static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() 
 static const char *dmenucmd[] = { "dmenu_run", "-m", dmenumon, "-fn", dmenufont, "-nb", col_gray1, "-nf", col_gray3, "-sb", col_gray4, "-sf", col_black, NULL };
 static const char *termcmd[]  = { "st", NULL };
 
-/* audio: volume + output/input pickers, see ~/.local/bin/dwm-audio */
+/* audio: volume + output/input pickers, see ~/.local/bin/dwm-audio.
+ * The helper scripts are run by bare name: ~/.xinitrc puts ~/.local/bin on PATH. */
 #include <X11/XF86keysym.h>
-#define AUDIO "/home/USER/.local/bin/dwm-audio"
+#define AUDIO "dwm-audio"
 static const char *volupcmd[]   = { AUDIO, "vol", "up",      NULL };
 static const char *voldowncmd[] = { AUDIO, "vol", "down",    NULL };
 static const char *volmutecmd[] = { AUDIO, "vol", "mute",    NULL };
@@ -72,11 +73,11 @@ static const char *micupcmd[]   = { AUDIO, "vol", "micup",   NULL };
 static const char *micdowncmd[] = { AUDIO, "vol", "micdown", NULL };
 static const char *outmenucmd[] = { AUDIO, "menu", "out",    NULL };
 static const char *inmenucmd[]  = { AUDIO, "menu", "in",     NULL };
-static const char *traymenucmd[] = { "/home/USER/.local/bin/dwm-tray", "menu", NULL };
-static const char *netmenucmd[]   = { "/home/USER/.local/bin/dwm-net", "menu", NULL };
-static const char *powermenucmd[] = { "/home/USER/.local/bin/dwm-power", "menu", NULL };
-static const char *shotcmd[]     = { "/home/USER/.local/bin/dwm-shot", NULL };
-static const char *shotareacmd[] = { "/home/USER/.local/bin/dwm-shot", "area", NULL };
+static const char *traymenucmd[] = { "dwm-tray", "menu", NULL };
+static const char *netmenucmd[]   = { "dwm-net", "menu", NULL };
+static const char *powermenucmd[] = { "dwm-power", "menu", NULL };
+static const char *shotcmd[]     = { "dwm-shot", NULL };
+static const char *shotareacmd[] = { "dwm-shot", "area", NULL };
 
 static const Key keys[] = {
 	/* modifier                     key        function        argument */
