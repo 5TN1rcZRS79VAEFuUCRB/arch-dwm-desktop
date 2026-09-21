@@ -39,34 +39,22 @@ ram_usage() {
 	free -h | awk '/^Mem:/{print $3"/"$2}'
 }
 
-# Off by default: this ran nvidia-smi about twice a second, all day, including while the monitor
-# slept, and it competes with the NVIDIA driver during monitor sleep/wake. Set DWM_STATUS_GPU=1
-# (e.g. in ~/.xinitrc) to bring the GPU readout back.
+# GPU load and temperature (NVIDIA only; nothing is shown without nvidia-smi). One long-lived
+# nvidia-smi prints a sample every 2 s and we read the latest line. Starting a new nvidia-smi
+# twice a second was heavy and clashed with monitor sleep/wake, so do not go back to that.
+# Set DWM_STATUS_GPU=0 (e.g. in ~/.xinitrc) to turn the readout off.
+GPU_FILE="${XDG_RUNTIME_DIR:-$HOME/.cache}/dwm-status-gpu"
+rm -f "$GPU_FILE" "$GPU_FILE.tmp"
+GPU_READER=
+if [ "${DWM_STATUS_GPU:-1}" = 1 ] && command -v nvidia-smi >/dev/null; then
+	nvidia-smi --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits -l 2 2>/dev/null |
+		while IFS= read -r line; do
+			printf '%s\n' "${line//[[:space:]]/}" > "$GPU_FILE.tmp" && mv "$GPU_FILE.tmp" "$GPU_FILE"
+		done &
+	GPU_READER=$!
+fi
 gpu_stats() {
-	[ "${DWM_STATUS_GPU:-0}" = 1 ] || return 0
-	nvidia-smi --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits 2>/dev/null | tr -d ' '
-}
-
-# Laptops only (prints nothing without a battery): "BAT 87%", with a + while charging, an = when
-# held at a charge limit, and a ! when it is low. Details and power profiles: Mod+Shift+P (dwm-power).
-battery_text() {
-	local dir="${DWM_POWER_SUPPLY_DIR:-/sys/class/power_supply}" b cap status total=0 count=0 charging=0 holding=0 discharging=0
-	for b in "$dir"/BAT*; do
-		[ -r "$b/capacity" ] && [ -r "$b/status" ] || continue
-		cap="$(<"$b/capacity")"; status="$(<"$b/status")"
-		total=$((total + cap)); count=$((count + 1))
-		case "$status" in
-			Charging) charging=1 ;;
-			"Not charging") holding=1 ;;
-			Discharging) discharging=1 ;;
-		esac
-	done
-	[ "$count" -gt 0 ] || return 0
-	cap=$((total / count))
-	if [ "$charging" = 1 ]; then echo "BAT ${cap}%+"
-	elif [ "$discharging" = 1 ] && [ "$cap" -le 15 ]; then echo "BAT ${cap}%!"
-	elif [ "$holding" = 1 ]; then echo "BAT ${cap}%="
-	else echo "BAT ${cap}%"; fi
+	[ -r "$GPU_FILE" ] && cat "$GPU_FILE"
 }
 
 sampler() {
@@ -83,7 +71,7 @@ sampler() {
 
 sampler &
 SAMPLER=$!
-trap 'kill $SAMPLER 2>/dev/null' EXIT
+trap 'kill $SAMPLER $GPU_READER 2>/dev/null; pkill -P $$ nvidia-smi 2>/dev/null' EXIT
 
 # dwm-audio sends USR1 after a volume/device change so the bar redraws
 # immediately instead of waiting out the one-second sleep below.
