@@ -1,4 +1,4 @@
-# arch-desktop
+# arch-dwm-desktop
 
 A one-command setup for my Arch Linux desktop: dwm, st and dmenu with my configs, a status
 bar with CPU/GPU/RAM/volume/mic, mouse-clickable audio device pickers, dark mode everywhere,
@@ -10,16 +10,13 @@ On an Arch machine with a normal user that has `sudo`, and a network connection:
 
 ```sh
 sudo pacman -S --needed git        # if you don't have it yet
-git clone https://github.com/<your-github-user>/arch-desktop.git
-cd arch-desktop
+git clone https://github.com/5TN1rcZRS79VAEFuUCRB/arch-dwm-desktop.git
+cd arch-dwm-desktop
 ./install.sh
 ```
 
 Then log in on the first **text console** (Ctrl+Alt+F1). X starts automatically after login. If it
 doesn't (other console, or you exited X), run `startx`.
-
-If the repo is private, `git clone` will ask for GitHub credentials. The easy way is
-`sudo pacman -S --needed github-cli && gh auth login && gh repo clone <your-github-user>/arch-desktop`.
 
 ### Options
 
