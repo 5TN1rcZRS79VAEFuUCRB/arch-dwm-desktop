@@ -159,3 +159,9 @@ after changing your live setup, copy the changed file back into the matching pat
 
 `suckless/UPSTREAM.txt` records which upstream commits the vendored dwm/st/dmenu are based on
 and what was changed. Those tools keep their own licenses (see the `LICENSE` files inside).
+
+## License
+
+The scripts, configuration and installer in this repository are under the MIT license (see `LICENSE`).
+dwm, st and dmenu in `suckless/` are the suckless.org projects and keep their own licenses
+(see the `LICENSE` file in each folder).
