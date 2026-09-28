@@ -56,3 +56,4 @@ qt6ct
 # --- apps ---
 firefox
 keepassxc
+syncthing        # keeps the KeePassXC database in sync between machines

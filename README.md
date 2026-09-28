@@ -45,6 +45,7 @@ of X and run `startx` again.
 | Firefox settings: dark mode, privacy, no AI or sponsored content (`user.js`) | your Firefox profile directory |
 | Firefox extension: uBlock Origin, installed by a policy (`policies.json`) | `/etc/firefox/policies/` (needs sudo) |
 | KeePassXC dark theme | `~/.config/keepassxc/keepassxc.ini` (only that one setting) |
+| Syncthing (keeps the KeePassXC database in sync), started now and at every login | `systemctl --user enable syncthing`. Pair devices and share the folder yourself at http://127.0.0.1:8384; keys are never in this repo |
 | Desktop-wide "prefer dark" | dconf (`org.gnome.desktop.interface`) |
 
 Packages are listed in `packages.txt`.

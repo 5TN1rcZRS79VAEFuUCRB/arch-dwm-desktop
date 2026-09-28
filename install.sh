@@ -174,6 +174,17 @@ else:
 open(p, "w").write("\n".join(lines).rstrip("\n") + "\n")
 EOF
 
+# ---------------------------------------------------------------- Syncthing (KeePassXC sync)
+# Only the service is set up here. Device keys and the folder/device pairing live in
+# ~/.local/state/syncthing and are never in this repo; pair devices at http://127.0.0.1:8384.
+say "Syncthing: start now and at every login"
+if command -v syncthing >/dev/null; then
+	systemctl --user enable --now syncthing \
+		|| warn "could not start syncthing; after logging in run: systemctl --user enable --now syncthing"
+else
+	warn "syncthing is not installed; skipping"
+fi
+
 # ---------------------------------------------------------------- GTK dark preference (dconf)
 say "GTK/desktop dark preference"
 dconf_write() {
