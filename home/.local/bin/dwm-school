@@ -48,7 +48,10 @@ SYNC_EVERY = 300
 FOCUS_SECS = 600
 REMIND = [3 * 86400, 86400, 3 * 3600]  # seconds before due, longest first
 PTS = {"done": 10, "late": 3, "missing": -5}
+# Bar icons (Symbols Nerd Font): graduation cap, warning, coffee, star, flame
+CAP, WARN, COFFEE, STAR, FIRE = "", "", "󰅶", "", "󰈸"
 LATE_FIRST = 2 * 86400  # nothing due within this long: late work moves to the top
+BREAK = 3 * 86400  # nothing late and nothing due within this long: a break (ends when the 3-day reminder fires)
 
 
 # ---- storage ----
@@ -270,17 +273,27 @@ def short(title, n=28):
     return title if len(title) <= n else title[:n - 2] + ".."
 
 
+def break_until(items, now):
+    """End of the current break, or None. A break is earned: nothing late, nothing due within BREAK."""
+    if items and all(t["due"] - now > BREAK for t in items):
+        return items[0]["due"] - BREAK
+    return None
+
+
 def bar_text(tasks, errors, s, now):
     items = todo(tasks, s, now)
+    free = break_until(items, now)
+    if free and not errors:
+        return f"{COFFEE} free until {time.strftime('%a %-m/%-d', time.localtime(free))} | {STAR} {total(s)} {FIRE} {streak(s)}"
     if items:
         head = f"{short(items[0]['title'])} ({left(items[0]['due'] - now)})"
     else:
         head = "run dwm-school sync" if errors and not tasks else "all caught up"
-    parts = [(" " if errors else " ") + head]  # Nerd Font icons
+    parts = [(f"{WARN} " if errors else f"{CAP} ") + head]
     n_late = sum(t["due"] < now for t in items)
     if n_late:
         parts.append(f"{n_late} late")
-    parts.append(f" {total(s)} 󰈸 {streak(s)}")
+    parts.append(f"{STAR} {total(s)} {FIRE} {streak(s)}")
     return " | ".join(parts)
 
 
@@ -308,6 +321,10 @@ def summary(s, items, now):
     if s.get("summary_day") == today or time.localtime().tm_hour < 7:
         return
     s["summary_day"] = today
+    free = break_until(items, now)
+    if free:
+        notify(f"Break day: free until {time.strftime('%a %-m/%-d', time.localtime(free))}", "Nothing due for 3+ days. Enjoy it.")
+        return
     end_today = datetime.now().replace(hour=23, minute=59, second=59).timestamp()
     week = [t for t in items if now <= t["due"] <= now + 7 * 86400]
     n_today = sum(t["due"] <= end_today for t in week)
@@ -454,6 +471,9 @@ def selftest():
                    "c": {"pts": 10, "due": 2, "on_time": True}}
     assert (total(s), streak(s)) == (25, 2)
     assert (left(-90000), left(7200), left(59)) == ("1d late", "2h", "0m")
+    assert break_until([t("x", "canvas", 100)], now) == now + 28 * 3600  # free until 3 days before it's due
+    assert break_until([t("x", "canvas", 71)], now) is None  # due within 3 days: no break
+    assert break_until([t("x", "canvas", -1, "missing"), t("y", "canvas", 100)], now) is None  # late work: no break
     assert [course_name(n) for n in ("202660_1_ON_ENGL101_60413", "MATH 120A Fall", "Biology")] == ["ENGL101", "MATH 120A", "Biology"]
     print("ok")
 

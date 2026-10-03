@@ -136,7 +136,8 @@ each due date, plus a summary every morning. `Mod+A` opens a dmenu list: start a
 Points: Canvas work on time +10, late +3, missing -5 (Canvas reports which). Schoology's feed has no
 submission status, so you mark that work done yourself (on time +10, late +3, no penalty). A finished
 focus session is +2. Upcoming work comes first, Canvas before Schoology on the same day; when nothing is
-due within 2 days, late work moves to the top.
+due within 2 days, late work moves to the top. When nothing is late and nothing is due within 3 days,
+the bar shows a break (`free until Sun 10/11`) instead; it ends when the next 3-day reminder fires.
 
 It needs two things that are never in this repo:
 
