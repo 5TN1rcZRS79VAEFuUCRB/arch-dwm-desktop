@@ -254,6 +254,12 @@ else
 	warn "syncthing is not installed; skipping"
 fi
 
+# ---------------------------------------------------------------- git identity
+# GitHub noreply address, so commits work and push without exposing an email.
+say "git: commit name and email"
+git config --global user.name 5TN1rcZRS79VAEFuUCRB
+git config --global user.email 327155685+5TN1rcZRS79VAEFuUCRB@users.noreply.github.com
+
 # ---------------------------------------------------------------- Claude Code add-ons
 # ponytail + caveman plugins, and the caveman proxy routed in front of Claude Code
 # (caveman's SessionStart hook starts the proxy each session). Undo: caveman disable claude
