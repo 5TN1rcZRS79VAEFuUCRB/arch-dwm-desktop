@@ -65,6 +65,24 @@ pick() {
 	done
 }
 
+# Muting a filter-chain source (e.g. mic_filtered) is a software mute only: the
+# micmute LED follows the ALSA capture switch of the real mic, which never sees it.
+# Mirror the default source's mute onto the source the filter captures from.
+sync_mic_mute() {
+	local up m
+	up="$(pw-dump | python3 -c '
+import json, sys
+nodes = [o["info"]["props"] for o in json.load(sys.stdin) if o["type"] == "PipeWire:Interface:Node"]
+group = next((p.get("node.link-group") for p in nodes if p.get("node.name") == sys.argv[1]), None)
+for p in nodes:
+    if group and p.get("node.link-group") == group and p.get("media.class") == "Stream/Input/Audio" and p.get("target.object"):
+        print(p["target.object"])
+        break' "$(pactl get-default-source)")"
+	[ -n "$up" ] || return 0
+	if [[ "$(wpctl get-volume @DEFAULT_AUDIO_SOURCE@)" == *MUTED* ]]; then m=1; else m=0; fi
+	pactl set-source-mute "$up" "$m"
+}
+
 # "LABEL 40%" or "LABEL MUTE" for one wpctl node
 level() {
 	local v
@@ -79,8 +97,10 @@ vol)
 	         wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ "${STEP}%+" ;;
 	down)    wpctl set-volume @DEFAULT_AUDIO_SINK@ "${STEP}%-" ;;
 	mute)    wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle ;;
-	micmute) wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle ;;
+	micmute) wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
+	         sync_mic_mute ;;
 	micup)   wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 0
+	         sync_mic_mute
 	         wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SOURCE@ "${STEP}%+" ;;
 	micdown) wpctl set-volume @DEFAULT_AUDIO_SOURCE@ "${STEP}%-" ;;
 	*)       echo "usage: dwm-audio vol up|down|mute|micmute|micup|micdown" >&2; exit 2 ;;
