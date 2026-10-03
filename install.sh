@@ -154,6 +154,45 @@ else
 	warn "firefox is not installed; skipping its settings"
 fi
 
+# ---------------------------------------------------------------- Xorg config (/etc/X11)
+# Touchpad tap-to-click everywhere (it only matches touchpads, so desktops are unaffected).
+# AMD's X driver with TearFree only when a GPU runs on the amdgpu kernel driver, so NVIDIA and
+# Intel machines get neither the package nor the file. Takes effect when X next starts.
+say "Xorg config: touchpad tap-to-click, AMD TearFree"
+HAS_AMDGPU=0
+for d in /sys/class/drm/card[0-9]*/device/driver; do
+	[ "$(basename "$(readlink -f "$d")")" = amdgpu ] && HAS_AMDGPU=1
+done
+if [ "$HAS_AMDGPU" -eq 1 ] && [ "$DO_PACKAGES" -eq 1 ]; then
+	sudo pacman -S --needed --noconfirm xf86-video-amdgpu
+fi
+for f in etc/X11/xorg.conf.d/*.conf; do
+	dest="/$f"
+	if [ "${f##*/}" = 20-amdgpu.conf ] && [ "$HAS_AMDGPU" -eq 0 ]; then
+		continue
+	fi
+	if ! cmp -s "$f" "$dest" 2>/dev/null; then
+		[ -e "$dest" ] && sudo cp -a "$dest" "$dest.bak-$(date +%Y%m%d-%H%M%S)"
+		sudo install -Dm644 "$f" "$dest"
+		echo "Installed $dest"
+	fi
+done
+
+# ---------------------------------------------------------------- local hostnames (mDNS)
+# Avahi announces this machine as <hostname>.local, and nss-mdns lets ssh, ping, etc.
+# look up other machines' .local names. Adds mdns_minimal to the hosts: line only once.
+say "mDNS: .local hostnames"
+if [ -e /usr/lib/libnss_mdns_minimal.so.2 ]; then
+	if ! grep -q '^hosts:.*mdns' /etc/nsswitch.conf; then
+		sudo cp -a /etc/nsswitch.conf "/etc/nsswitch.conf.bak-$(date +%Y%m%d-%H%M%S)"
+		sudo sed -Ei '/^hosts:/s/ (resolve|files)/ mdns_minimal [NOTFOUND=return] \1/' /etc/nsswitch.conf
+	fi
+	sudo systemctl enable --now avahi-daemon \
+		|| warn "could not start avahi; run: sudo systemctl enable --now avahi-daemon"
+else
+	warn "nss-mdns is not installed; skipping .local hostnames"
+fi
+
 # ---------------------------------------------------------------- KeePassXC theme
 say "KeePassXC: dark theme"
 KP="$HOME/.config/keepassxc/keepassxc.ini"

@@ -38,6 +38,10 @@ libxss
 # --- network picker (dwm-net, Mod+N); the laptop's battery and power profile need no package here
 networkmanager
 
+# --- local hostnames: reach other machines as name.local (ssh gavin@arch-server.local)
+avahi
+nss-mdns
+
 # --- screenshots (dwm-shot: Print / Shift+Print)
 maim
 slop
