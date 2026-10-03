@@ -6,5 +6,6 @@ Local changes on top of upstream:
   dwm    config.h: monochrome look, Mod+F10/F11/F12 + media keys for volume, Mod+O /
          Mod+Shift+O for the output/input pickers, Mod+Shift+T / right-click on the bar title for the
          tray menu, scroll/click actions on the status text
+         dwm.c: new windows are shrunk to fit the screen (oversized GTK file choosers)
   st     config.h
   dmenu  dmenu.c: mouse support for vertical lists (click, hover, wheel, cancel); config.h

@@ -1053,6 +1053,9 @@ manage(Window w, XWindowAttributes *wa)
 		applyrules(c);
 	}
 
+	/* never larger than the screen (GTK file choosers reopen at their saved size) */
+	c->w = MIN(c->w, c->mon->ww - 2 * borderpx);
+	c->h = MIN(c->h, c->mon->wh - 2 * borderpx);
 	if (c->x + WIDTH(c) > c->mon->wx + c->mon->ww)
 		c->x = c->mon->wx + c->mon->ww - WIDTH(c);
 	if (c->y + HEIGHT(c) > c->mon->wy + c->mon->wh)
