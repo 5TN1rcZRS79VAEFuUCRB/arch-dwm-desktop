@@ -42,6 +42,7 @@ of X and run `startx` again.
 | Bar, audio, tray, network (`dwm-net`), battery (`dwm-power`), school assignments (`dwm-school`) and screenshot scripts, the idle screen-off (`dwm-blank`), plus a `keepassxc` launcher (slightly smaller text at high DPI) | `~/.local/bin/` |
 | GTK 3/4, Qt 5/6 and xdg-portal dark-mode config, minimal dunst notifications in the bar's colors | `~/.config/` |
 | Firefox settings: dark mode, privacy, no AI or sponsored content (`user.js`) | your Firefox profile directory |
+| Firefox as the default browser, so links from other programs open there | `~/.config/mimeapps.list` |
 | Firefox extensions: uBlock Origin and Violentmonkey, installed by a policy (`policies.json`) | `/etc/firefox/policies/` (needs sudo) |
 | Always-visible userscript (`firefox/always-visible.user.js`) — makes pages act focused/visible in the background. Imported into Violentmonkey by hand once (a policy can't seed its scripts) | Violentmonkey |
 | Xorg: touchpad tap-to-click (one finger left, two right, three middle); on AMD GPUs only, AMD's driver (`xf86-video-amdgpu`) with TearFree | `/etc/X11/xorg.conf.d/` (needs sudo) |
