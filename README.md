@@ -129,7 +129,7 @@ switch by choosing one.
 ## School assignments
 
 `dwm-school` puts the next Canvas or Schoology assignment at the left of the status text (title and
-time left, how many are late, points and streak) and sends reminders 3 days, 1 day and 3 hours before
+time left, points and streak; never a count of late work) and sends reminders 3 days, 1 day and 3 hours before
 each due date, plus a summary every morning. `Mod+A` opens a dmenu list: start a 10-minute focus timer
 (it counts down in the bar), open an assignment in the browser, or mark Schoology work done.
 

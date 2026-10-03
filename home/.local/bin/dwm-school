@@ -249,7 +249,7 @@ def mark_done(t):
 # ---- what's next ----
 
 def todo(tasks, s, now):
-    """Unfinished work: upcoming first, by day, Canvas before Schoology on the same day; then overdue,
+    """Unfinished work (the bar shows only the first, never a count of late work): upcoming first, by day, Canvas before Schoology on the same day; then overdue,
     most recent first (likeliest to still be accepted). With nothing due soon, overdue goes first."""
     keep = [t for t in tasks if t["id"] not in s["hidden"] and (
         t["status"] in ("todo", "missing") if t["source"] == "canvas"
@@ -290,9 +290,6 @@ def bar_text(tasks, errors, s, now):
     else:
         head = "run dwm-school sync" if errors and not tasks else "all caught up"
     parts = [(f"{WARN} " if errors else f"{CAP} ") + head]
-    n_late = sum(t["due"] < now for t in items)
-    if n_late:
-        parts.append(f"{n_late} late")
     parts.append(f"{STAR} {total(s)} {FIRE} {streak(s)}")
     return " | ".join(parts)
 
@@ -328,9 +325,8 @@ def summary(s, items, now):
     end_today = datetime.now().replace(hour=23, minute=59, second=59).timestamp()
     week = [t for t in items if now <= t["due"] <= now + 7 * 86400]
     n_today = sum(t["due"] <= end_today for t in week)
-    n_late = sum(t["due"] < now for t in items)
     body = "\n".join(f"{left(t['due'] - now):>4}  {t['title']}" for t in week[:6]) or "Nothing due this week."
-    notify(f"{n_today} due today, {len(week)} this week, {n_late} late. {total(s)} pts", body)
+    notify(f"{n_today} due today, {len(week)} this week. {total(s)} pts", body)
 
 
 def token_warning(s, now):
