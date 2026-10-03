@@ -149,8 +149,7 @@ screen saver are honoured, because `dwm-blank` follows the X server's own saver 
 
 * **NVIDIA drivers.** The right package depends on your GPU and kernel: install it yourself
   (for example `sudo pacman -S nvidia-open`). The bar shows GPU load and temperature by itself once
-  `nvidia-smi` works (it uses one long-running `nvidia-smi`, not a new one every second); turn it
-  off with `export DWM_STATUS_GPU=0` in `~/.xinitrc`.
+  `nvidia-smi` works (it uses one long-running `nvidia-smi`, not a new one every second).
 * **GPU/RGB lighting control** (hardware specific).
 * **Monitor refresh rate and G-SYNC.** These depend on the monitor and output name, so `.xinitrc`
   only has a commented-out `xrandr` example to edit.

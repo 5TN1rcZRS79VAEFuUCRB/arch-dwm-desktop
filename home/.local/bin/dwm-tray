@@ -9,7 +9,6 @@ service and a dmenu picker listing whatever has registered.
 
   dwm-tray daemon   run the watcher/host (started from ~/.xinitrc)
   dwm-tray menu     dmenu list of tray apps; choosing one restores it, "quit: <app>" closes it
-  dwm-tray list     print the entries (for testing)
 """
 import os
 import re
@@ -45,8 +44,7 @@ WATCHER_XML = """
 </node>
 """
 
-DMENU = ["dmenu", "-i", "-l", "12", "-fn", "monospace:size=10",
-         "-nb", "#222222", "-nf", "#bbbbbb", "-sb", "#eeeeee", "-sf", "#000000"]
+DMENU = ["dmenu", "-i", "-l", "12"]
 
 
 def split_key(key):
@@ -239,9 +237,6 @@ def main():
         run_daemon()
     elif mode == "menu":
         run_menu()
-    elif mode == "list":
-        items = entries()
-        print("\n".join(l for l, _, _ in items) if items else "(none)" if items is not None else "(no watcher)")
     else:
         print(__doc__, file=sys.stderr)
         sys.exit(2)

@@ -4,11 +4,9 @@
 # bar and keybindings (PipeWire via wpctl/pactl).
 #
 #   dwm-audio vol up|down|mute|micmute|micup|micdown
-#   dwm-audio status              one-line summary for the bar, e.g. "VOL 40% HDMI"
+#   dwm-audio status              one-line summary for the bar, e.g. "VOL 40% MIC MUTE"
 #   dwm-audio menu out|in         dmenu picker; sets the default device and
 #                                 moves any playing/recording streams onto it
-#   dwm-audio list out|in         print the picker entries (marks the default with *)
-#   dwm-audio pick out|in LABEL   select a device by its picker label
 
 STEP=5
 
@@ -20,8 +18,7 @@ refresh_bar() {
 	return 0
 }
 
-DMENU=(dmenu -i -l 8 -fn "monospace:size=10"
-	-nb "#222222" -nf "#bbbbbb" -sb "#eeeeee" -sf "#000000")
+DMENU=(dmenu -i -l 8)
 
 kind_setup() {
 	case "$1" in
@@ -29,7 +26,7 @@ kind_setup() {
 	     STREAMS=sink-inputs; MOVE_CMD=move-sink-input; PROMPT="Output" ;;
 	in)  KIND=sources; DEFAULT_CMD=get-default-source; SET_CMD=set-default-source
 	     STREAMS=source-outputs; MOVE_CMD=move-source-output; PROMPT="Input" ;;
-	*)   echo "usage: dwm-audio list|menu|pick out|in" >&2; exit 2 ;;
+	*)   echo "usage: dwm-audio menu out|in" >&2; exit 2 ;;
 	esac
 }
 
@@ -69,15 +66,11 @@ pick() {
 	done
 }
 
-status() {
-	local v pct out m mpct mic
-	v="$(wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null)"
-	pct="$(awk '{printf "%d", $2 * 100 + 0.5}' <<< "$v")"
-	if [[ "$v" == *MUTED* ]]; then out="VOL MUTE"; else out="VOL ${pct}%"; fi
-	m="$(wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>/dev/null)"
-	mpct="$(awk '{printf "%d", $2 * 100 + 0.5}' <<< "$m")"
-	if [[ "$m" == *MUTED* ]]; then mic="MIC MUTE"; else mic="MIC ${mpct}%"; fi
-	echo "${out} ${mic}"
+# "LABEL 40%" or "LABEL MUTE" for one wpctl node
+level() {
+	local v
+	v="$(wpctl get-volume "$2" 2>/dev/null)"
+	if [[ "$v" == *MUTED* ]]; then echo "$1 MUTE"; else awk -v l="$1" '{printf "%s %d%%\n", l, $2 * 100 + 0.5}' <<< "$v"; fi
 }
 
 case "$1" in
@@ -94,9 +87,7 @@ vol)
 	*)       echo "usage: dwm-audio vol up|down|mute|micmute|micup|micdown" >&2; exit 2 ;;
 	esac
 	refresh_bar ;;
-status) status ;;
-list)   kind_setup "$2"; list_entries ;;
-pick)   kind_setup "$2"; pick "$3"; refresh_bar ;;
+status) echo "$(level VOL @DEFAULT_AUDIO_SINK@) $(level MIC @DEFAULT_AUDIO_SOURCE@)" ;;
 menu)
 	kind_setup "$2"
 	if [ "$2" = out ]; then other=in; link="-> Input devices"; else other=out; link="-> Output devices"; fi
@@ -107,5 +98,5 @@ menu)
 	*)       pick "$choice"; refresh_bar ;;
 	esac ;;
 *)
-	echo "usage: dwm-audio vol|status|menu|list|pick" >&2; exit 2 ;;
+	echo "usage: dwm-audio vol|status|menu" >&2; exit 2 ;;
 esac

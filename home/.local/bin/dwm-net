@@ -3,23 +3,18 @@
 dwm-net: choose which network to use, from dmenu (needs NetworkManager).
 
   dwm-net menu    pick a Wi-Fi network, a wired connection or an action
-  dwm-net list    print the menu lines (for testing)
 
 Choosing a Wi-Fi network connects to it. A network you have not used before that needs a
 password opens a small terminal running `nmcli --ask`, so the password is never shown on
 screen. Bound to Mod+N in dwm's config.h.
 """
-import os
 import shlex
 import shutil
 import subprocess
 import sys
 import time
 
-DMENU = ["dmenu", "-i", "-l", "14", "-fn", "monospace:size=10",
-         "-nb", "#222222", "-nf", "#bbbbbb", "-sb", "#eeeeee", "-sf", "#000000"]
-if os.environ.get("DWM_NET_DMENU"):      # lets tests replace dmenu
-    DMENU = shlex.split(os.environ["DWM_NET_DMENU"])
+DMENU = ["dmenu", "-i", "-l", "14"]
 
 BARS = ["____", "▂___", "▂▄__", "▂▄▆_", "▂▄▆█"]
 
@@ -90,9 +85,7 @@ def wired_and_other():
     if ok:
         for line in out.splitlines():
             f = split_terse(line)
-            if len(f) < 4 or f[2] in ("802-11-wireless", "loopback", "bridge", "tun", "wireguard-legacy"):
-                continue
-            if f[2] not in ("802-3-ethernet", "vpn", "wireguard", "gsm", "cdma", "pppoe"):
+            if len(f) < 4 or f[2] not in ("802-3-ethernet", "vpn", "wireguard", "gsm", "cdma", "pppoe"):
                 continue
             items.append((f[0], f[1], f[2], bool(f[3])))
     return items
@@ -129,8 +122,9 @@ def build_menu():
     """[(label, action)] where action is a tuple, or None for a line that only shows text."""
     rows = [(status_line(), None)]
     wifi = has_wifi_device()
-    if wifi and wifi_radio_on():
-        saved = saved_profiles()
+    radio = wifi and wifi_radio_on()
+    saved = saved_profiles() if wifi else {}
+    if radio:
         nets = scan()
         if not nets:
             rows.append(("(no Wi-Fi networks found yet - try Rescan)", None))
@@ -147,10 +141,10 @@ def build_menu():
         rows.append(("%s: %s%s" % (kind, clean(name)[:40], "  (connected - choose to disconnect)" if active else ""),
                      ("toggle", uuid, active)))
     if wifi:
-        rows.append(("Turn Wi-Fi off" if wifi_radio_on() else "Turn Wi-Fi on", ("radio", "off" if wifi_radio_on() else "on")))
-        if wifi_radio_on():
+        rows.append(("Turn Wi-Fi off" if radio else "Turn Wi-Fi on", ("radio", "off" if radio else "on")))
+        if radio:
             rows.append(("Rescan for networks", ("rescan",)))
-        if saved_profiles():
+        if saved:
             rows.append(("Forget a saved Wi-Fi network...", ("forget",)))
     rows.append(("All network settings (nmtui)...", ("nmtui",)))
     # labels must be unique so a choice maps back to exactly one row
@@ -235,12 +229,8 @@ def run_menu():
 
 
 def main():
-    mode = sys.argv[1] if len(sys.argv) > 1 else ""
-    if mode == "menu":
+    if sys.argv[1:] == ["menu"]:
         run_menu()
-    elif mode == "list":
-        for label, _ in build_menu():
-            print(label)
     else:
         print(__doc__, file=sys.stderr)
         sys.exit(2)

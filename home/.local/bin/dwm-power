@@ -4,23 +4,17 @@ dwm-power: battery details and power profile, from dmenu (for laptops).
 
   dwm-power menu    show battery level, time left, power draw and health;
                     pick a power profile to switch to it (needs power-profiles-daemon)
-  dwm-power list    print the menu lines (for testing)
 
 The battery percentage in the bar comes from dwm-status.sh. Bound to Mod+Shift+P in dwm's config.h.
 """
 import glob
 import os
-import shlex
 import shutil
 import subprocess
 import sys
 
-DMENU = ["dmenu", "-i", "-l", "12", "-fn", "monospace:size=10",
-         "-nb", "#222222", "-nf", "#bbbbbb", "-sb", "#eeeeee", "-sf", "#000000"]
-if os.environ.get("DWM_POWER_DMENU"):    # lets tests replace dmenu
-    DMENU = shlex.split(os.environ["DWM_POWER_DMENU"])
-
-PS = os.environ.get("DWM_POWER_SUPPLY_DIR", "/sys/class/power_supply")
+DMENU = ["dmenu", "-i", "-l", "12"]
+PS = "/sys/class/power_supply"
 
 
 def read(path, default=None):
@@ -44,10 +38,7 @@ def batteries():
 
 
 def on_ac():
-    for d in glob.glob(os.path.join(PS, "A[CD]*")) + glob.glob(os.path.join(PS, "ADP*")):
-        if read(os.path.join(d, "online")) == "1":
-            return True
-    return False
+    return any(read(d + "/type") == "Mains" and read(d + "/online") == "1" for d in glob.glob(PS + "/*"))
 
 
 def battery_totals(bats):
@@ -137,12 +128,8 @@ def run_menu():
 
 
 def main():
-    mode = sys.argv[1] if len(sys.argv) > 1 else ""
-    if mode == "menu":
+    if sys.argv[1:] == ["menu"]:
         run_menu()
-    elif mode == "list":
-        for label, _ in build_menu():
-            print(label)
     else:
         print(__doc__, file=sys.stderr)
         sys.exit(2)

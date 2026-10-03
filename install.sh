@@ -76,40 +76,31 @@ if [ "$DO_PACKAGES" -eq 1 ]; then
 fi
 
 # ---------------------------------------------------------------- display scaling
-# Uses xrandr when X is running. A fresh install usually runs from the console, so otherwise
-# it reads each connected screen's EDID from the kernel, preferring the laptop panel (eDP/LVDS).
+# Reads each connected screen's EDID from the kernel (works from the console, before X runs),
+# preferring the laptop panel (eDP/LVDS).
 # A laptop panel is read from much closer than a desktop monitor, so its physical DPI is
 # scaled by 3/4: the T14's 161 DPI panel gets 120 (125%), not 168.
 detect_dpi() {
-	{ [ -z "${DISPLAY:-}" ] || xrandr --current 2>/dev/null || true; } | python3 -c '
+	python3 -c '
 import glob, os, re, sys
 LAPTOP = 0.75
 best = None
-for line in sys.stdin:
-    m = re.match(r"^(\S+) connected( primary)? (\d+)x(\d+)\+\d+\+\d+ .*? (\d+)mm x (\d+)mm", line)
-    if m and int(m.group(5)) > 0:
-        dpi = int(m.group(3)) * 25.4 / int(m.group(5))
-        if re.match(r"(eDP|LVDS)", m.group(1)):
-            dpi *= LAPTOP
-        if best is None or m.group(2):
-            best = dpi
-if best is None:
-    for conn in sorted(glob.glob("/sys/class/drm/card*-*")):
-        try:
-            if open(conn + "/status").read().strip() != "connected":
-                continue
-            edid = open(conn + "/edid", "rb").read()
-        except OSError:
+for conn in sorted(glob.glob("/sys/class/drm/card*-*")):
+    try:
+        if open(conn + "/status").read().strip() != "connected":
             continue
-        dtd = edid[54:72]  # first detailed timing: native resolution and size in mm
-        if len(dtd) < 18 or dtd[0] == dtd[1] == 0:
-            continue
-        px = dtd[2] | (dtd[4] & 0xF0) << 4
-        mm = dtd[12] | (dtd[14] & 0xF0) << 4
-        if px and mm:
-            internal = re.search(r"-(eDP|LVDS)", os.path.basename(conn))
-            if best is None or internal:
-                best = px * 25.4 / mm * (LAPTOP if internal else 1)
+        edid = open(conn + "/edid", "rb").read()
+    except OSError:
+        continue
+    dtd = edid[54:72]  # first detailed timing: native resolution and size in mm
+    if len(dtd) < 18 or dtd[0] == dtd[1] == 0:
+        continue
+    px = dtd[2] | (dtd[4] & 0xF0) << 4
+    mm = dtd[12] | (dtd[14] & 0xF0) << 4
+    if px and mm:
+        internal = re.search(r"-(eDP|LVDS)", os.path.basename(conn))
+        if best is None or internal:
+            best = px * 25.4 / mm * (LAPTOP if internal else 1)
 if best is None:
     sys.exit(1)
 print(min([96, 120, 144, 168, 192], key=lambda s: abs(s - best)))'

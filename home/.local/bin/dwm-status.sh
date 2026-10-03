@@ -42,11 +42,10 @@ ram_usage() {
 # GPU load and temperature (NVIDIA only; nothing is shown without nvidia-smi). One long-lived
 # nvidia-smi prints a sample every 2 s and we read the latest line. Starting a new nvidia-smi
 # twice a second was heavy and clashed with monitor sleep/wake, so do not go back to that.
-# Set DWM_STATUS_GPU=0 (e.g. in ~/.xinitrc) to turn the readout off.
 GPU_FILE="${XDG_RUNTIME_DIR:-$HOME/.cache}/dwm-status-gpu"
 rm -f "$GPU_FILE" "$GPU_FILE.tmp"
 GPU_READER=
-if [ "${DWM_STATUS_GPU:-1}" = 1 ] && command -v nvidia-smi >/dev/null; then
+if command -v nvidia-smi >/dev/null; then
 	nvidia-smi --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits -l 2 2>/dev/null |
 		while IFS= read -r line; do
 			printf '%s\n' "${line//[[:space:]]/}" > "$GPU_FILE.tmp" && mv "$GPU_FILE.tmp" "$GPU_FILE"
@@ -60,8 +59,8 @@ gpu_stats() {
 # Laptops only (prints nothing without a battery): "BAT 87%", with a + while charging, an = when
 # held at a charge limit, and a ! when it is low. Details and power profiles: Mod+Shift+P (dwm-power).
 battery_text() {
-	local dir="${DWM_POWER_SUPPLY_DIR:-/sys/class/power_supply}" b cap status total=0 count=0 charging=0 holding=0 discharging=0
-	for b in "$dir"/BAT*; do
+	local b cap status total=0 count=0 charging=0 holding=0 discharging=0
+	for b in /sys/class/power_supply/BAT*; do
 		[ -r "$b/capacity" ] && [ -r "$b/status" ] || continue
 		cap="$(<"$b/capacity")"; status="$(<"$b/status")"
 		total=$((total + cap)); count=$((count + 1))

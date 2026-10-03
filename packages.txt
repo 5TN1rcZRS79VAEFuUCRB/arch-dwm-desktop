@@ -6,8 +6,6 @@ base-devel
 libx11
 libxft
 libxinerama
-freetype2
-fontconfig
 
 # --- X server and the tools ~/.xinitrc and the bar use ---
 xorg-server
@@ -44,12 +42,10 @@ nss-mdns
 
 # --- screenshots (dwm-shot: Print / Shift+Print)
 maim
-slop
 xclip
 
 # --- bar stats + helper scripts ---
 lm_sensors
-python
 python-gobject
 
 # --- dark mode plumbing (GTK, Qt5/Qt6, xdg portal) ---
