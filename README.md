@@ -67,6 +67,7 @@ Packages are listed in `packages.txt`.
 | Quit dwm | `Mod+Shift+Q` |
 | **Volume up / down / mute** | `Mod+F12` / `Mod+F11` / `Mod+F10` (or the keyboard's media keys) |
 | **Mic up / down / mute** | `Mod+Shift+F12` / `Mod+Shift+F11` / `Mod+Shift+F10` |
+| **Laptop screen brightness up / down** | The keyboard's brightness keys (5% steps) |
 | **Output device picker / input device picker** | `Mod+O` / `Mod+Shift+O` |
 | **Tray apps menu** | `Mod+Shift+T`, or right-click the window title in the bar |
 | **Network picker** | `Mod+N` |

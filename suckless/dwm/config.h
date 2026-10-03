@@ -73,6 +73,9 @@ static const char *micupcmd[]   = { AUDIO, "vol", "micup",   NULL };
 static const char *micdowncmd[] = { AUDIO, "vol", "micdown", NULL };
 static const char *outmenucmd[] = { AUDIO, "menu", "out",    NULL };
 static const char *inmenucmd[]  = { AUDIO, "menu", "in",     NULL };
+/* laptop backlight (Fn brightness keys), see brightnessctl(1) */
+static const char *brightupcmd[]   = { "brightnessctl", "-q", "set", "5%+", NULL };
+static const char *brightdowncmd[] = { "brightnessctl", "-q", "set", "5%-", NULL };
 static const char *traymenucmd[] = { "dwm-tray", "menu", NULL };
 static const char *netmenucmd[]   = { "dwm-net", "menu", NULL };
 static const char *powermenucmd[] = { "dwm-power", "menu", NULL };
@@ -121,6 +124,8 @@ static const Key keys[] = {
 	{ 0,                            XF86XK_AudioLowerVolume, spawn, {.v = voldowncmd } },
 	{ 0,                            XF86XK_AudioMute,        spawn, {.v = volmutecmd } },
 	{ 0,                            XF86XK_AudioMicMute,     spawn, {.v = micmutecmd } },
+	{ 0,                            XF86XK_MonBrightnessUp,   spawn, {.v = brightupcmd } },
+	{ 0,                            XF86XK_MonBrightnessDown, spawn, {.v = brightdowncmd } },
 	TAGKEYS(                        XK_1,                      0)
 	TAGKEYS(                        XK_2,                      1)
 	TAGKEYS(                        XK_3,                      2)

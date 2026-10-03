@@ -27,6 +27,10 @@ pipewire-pulse
 pipewire-alsa
 wireplumber
 libpulse
+alsa-utils       # runs the UCM boot sequence at startup; without it the laptop mic-mute LED never follows mute
+
+# --- laptop backlight (Fn brightness keys, bound in dwm's config.h)
+brightnessctl
 
 # --- idle screen blanking (see dwm-blank)
 libxss
