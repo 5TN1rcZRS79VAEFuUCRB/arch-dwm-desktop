@@ -132,9 +132,10 @@ switch by choosing one.
 `dwm-school` puts the next Canvas or Schoology assignment at the left of the status text (title and
 time left, points and streak; never a count of late work) and sends reminders 3 days, 1 day and 3 hours before
 each due date, plus a summary every morning. `Mod+A` opens a dmenu list: start a 10-minute focus session
-(it opens the assignment and counts down in the bar with the task's name; when it ends, pick 10 more
-minutes, a 5-minute break or done; **Finished it** ends a session early and checks the task off), open an
-assignment in the browser, or mark Schoology work done.
+(it opens the assignment and counts down in the bar with the task's name; when it ends, a notification
+says so and `Mod+A` offers 10 more minutes or a 5-minute break, so nothing grabs the keyboard while you
+type; **Finished it** ends a session early and checks the task off), open an assignment in the browser,
+or mark Schoology work done.
 
 Points: Canvas work on time +10, late +3, missing -5 (Canvas reports which). Schoology's feed has no
 submission status, so you mark that work done yourself (on time +10, late +3, no penalty). A finished

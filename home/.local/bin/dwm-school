@@ -47,6 +47,7 @@ AHEAD = 60 * 86400
 SYNC_EVERY = 300
 FOCUS_SECS = 600
 REST_SECS = 300
+NEXT_WINDOW = 1800  # after a session or break, the menu offers 10 more minutes for this long
 REMIND = [3 * 86400, 86400, 3 * 3600]  # seconds before due, longest first
 PTS = {"done": 10, "late": 3, "missing": -5}
 # Bar icons (Symbols Nerd Font): graduation cap, warning, coffee, star, flame
@@ -403,27 +404,39 @@ def timer(secs, icon, text):
     return True
 
 
-def focus(t):
-    """Open the assignment and run 10-minute sessions, asking after each: more, a break, or done."""
-    open_url(t)
+def focus(t, reopen=True):
+    """One 10-minute session. When it ends, a notification points to Mod+a for more or a break:
+    nothing pops up that grabs the keyboard while you're typing."""
+    if reopen:
+        open_url(t)
+        notify(f"Focus 10 min: {t['title']}", "Just start. It doesn't have to be good yet.")
     with state() as s:
         s["focus_task"] = t["id"]
-    notify(f"Focus 10 min: {t['title']}", "Just start. It doesn't have to be good yet.")
-    # "10 more minutes" is listed first: an Enter typed into the essay as dmenu pops up keeps you going.
-    after_focus = [("10 more minutes", "more"), ("5-minute break", "rest"), ("Done", "done")]
-    after_rest = [("Back to it: 10 minutes", "more"), ("Done for now", "done")]
-    while timer(FOCUS_SECS, TIMER, short(t["title"])):
+        s.pop("focus_next", None)
+    if not timer(FOCUS_SECS, TIMER, short(t["title"])):
+        return
+    with state() as s:
+        s["focus_pts"] += 2
+        s["focus_next"] = time.time()
+        pts = total(s)
+    tick()
+    notify(f"Session done: +2 pts ({pts})", "Mod+a: 10 more minutes or a 5-minute break", urgent=True)
+
+
+def rest(t):
+    with state() as s:
+        s.pop("focus_next", None)
+    if timer(REST_SECS, COFFEE, "break"):
         with state() as s:
-            s["focus_pts"] += 2
-            pts = total(s)
-        tick()
-        nxt = dmenu(after_focus, f"+2 pts ({pts}). Next?")
-        if nxt == "rest":
-            if not timer(REST_SECS, COFFEE, "break"):
-                return
-            nxt = dmenu(after_rest, f"Break's over: {short(t['title'], 40)}")
-        if nxt != "more":
-            return
+            s["focus_next"] = time.time()
+        notify(f"Break's over: {t['title']}", "Mod+a: 10 more minutes", urgent=True)
+
+
+def next_session(tasks, s, now):
+    """The task to offer "10 more minutes" on: a session or break ended within NEXT_WINDOW."""
+    if now - s.get("focus_next", 0) > NEXT_WINDOW:
+        return None
+    return next((x for x in tasks if x["id"] == s.get("focus_task")), None)
 
 
 def finish():
@@ -454,12 +467,15 @@ def run_menu():
     with state() as s:
         items = todo(tasks, s, now)
         prompt = f"{total(s)}pt streak {streak(s)}"
+        again = next_session(tasks, s, now)
     rows = []
+    if again and not focus_end():
+        rows += [(f"10 more minutes: {again['title']}", ("more", again)), ("5-minute break", ("rest", again))]
     if focus_end(TIMER) > now:
         rows.append(("Finished it", ("finish", None)))
     if focus_end() > now:
         rows.append(("Stop timer", ("stop", None)))
-    elif items:
+    elif items and not again:
         rows.append((f">> Start 10-min focus: {items[0]['title']}", ("focus", items[0])))
     rows += [(f"{left(t['due'] - now):>8}  {t['course'] or 'Schoology'}: {t['title']}", ("task", t)) for t in items]
     rows.append(("Sync now", ("sync", None)))
@@ -471,6 +487,10 @@ def run_menu():
         act, t = dmenu(sub, short(t["title"], 40)) or (None, None)
     if act == "focus":
         focus(t)
+    elif act == "more":
+        focus(t, reopen=False)
+    elif act == "rest":
+        rest(t)
     elif act == "finish":
         finish()
     elif act == "stop":
