@@ -17,8 +17,7 @@ usage() {
 Usage: ./install.sh [options]
 
   --dpi N         display scaling: 96 (100%), 120, 144 (150%), 168, 192 (200%).
-                  Default: worked out from your monitor's size (needs a running X
-                  session), otherwise 96.
+                  Default: worked out from your monitor's size, otherwise 96.
   --steam         also install Steam (needs the [multilib] repo enabled in
                   /etc/pacman.conf) and the matching 32-bit graphics libraries
   --no-packages   skip the pacman step
@@ -75,10 +74,11 @@ if [ "$DO_PACKAGES" -eq 1 ]; then
 fi
 
 # ---------------------------------------------------------------- display scaling
+# Uses xrandr when X is running. A fresh install usually runs from the console, so otherwise
+# it reads each connected screen's EDID from the kernel, preferring the laptop panel (eDP/LVDS).
 detect_dpi() {
-	command -v xrandr >/dev/null && [ -n "${DISPLAY:-}" ] || return 1
-	xrandr --current 2>/dev/null | python3 -c '
-import re, sys
+	{ [ -z "${DISPLAY:-}" ] || xrandr --current 2>/dev/null || true; } | python3 -c '
+import glob, os, re, sys
 best = None
 for line in sys.stdin:
     m = re.match(r"^(\S+) connected( primary)? (\d+)x(\d+)\+\d+\+\d+ .*? (\d+)mm x (\d+)mm", line)
@@ -86,6 +86,23 @@ for line in sys.stdin:
         dpi = int(m.group(3)) * 25.4 / int(m.group(5))
         if best is None or m.group(2):
             best = dpi
+if best is None:
+    for conn in sorted(glob.glob("/sys/class/drm/card*-*")):
+        try:
+            if open(conn + "/status").read().strip() != "connected":
+                continue
+            edid = open(conn + "/edid", "rb").read()
+        except OSError:
+            continue
+        dtd = edid[54:72]  # first detailed timing: native resolution and size in mm
+        if len(dtd) < 18 or dtd[0] == dtd[1] == 0:
+            continue
+        px = dtd[2] | (dtd[4] & 0xF0) << 4
+        mm = dtd[12] | (dtd[14] & 0xF0) << 4
+        if px and mm:
+            internal = re.search(r"-(eDP|LVDS)", os.path.basename(conn))
+            if best is None or internal:
+                best = px * 25.4 / mm
 if best is None:
     sys.exit(1)
 print(min([96, 120, 144, 168, 192], key=lambda s: abs(s - best)))'
@@ -96,7 +113,7 @@ if [ -z "$DPI" ]; then
 		say "Detected display scaling: ${DPI} DPI"
 	else
 		DPI=96
-		warn "could not detect your monitor (no X session running); using 96 DPI."
+		warn "could not detect your monitor's size; using 96 DPI."
 		warn "on a 4K screen rerun with e.g.  ./install.sh --no-packages --no-build --dpi 144"
 	fi
 fi
