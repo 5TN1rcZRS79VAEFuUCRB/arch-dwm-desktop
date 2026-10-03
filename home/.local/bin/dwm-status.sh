@@ -57,6 +57,28 @@ gpu_stats() {
 	[ -r "$GPU_FILE" ] && cat "$GPU_FILE"
 }
 
+# Laptops only (prints nothing without a battery): "BAT 87%", with a + while charging, an = when
+# held at a charge limit, and a ! when it is low. Details and power profiles: Mod+Shift+P (dwm-power).
+battery_text() {
+	local dir="${DWM_POWER_SUPPLY_DIR:-/sys/class/power_supply}" b cap status total=0 count=0 charging=0 holding=0 discharging=0
+	for b in "$dir"/BAT*; do
+		[ -r "$b/capacity" ] && [ -r "$b/status" ] || continue
+		cap="$(<"$b/capacity")"; status="$(<"$b/status")"
+		total=$((total + cap)); count=$((count + 1))
+		case "$status" in
+			Charging) charging=1 ;;
+			"Not charging") holding=1 ;;
+			Discharging) discharging=1 ;;
+		esac
+	done
+	[ "$count" -gt 0 ] || return 0
+	cap=$((total / count))
+	if [ "$charging" = 1 ]; then echo "BAT ${cap}%+"
+	elif [ "$discharging" = 1 ] && [ "$cap" -le 15 ]; then echo "BAT ${cap}%!"
+	elif [ "$holding" = 1 ]; then echo "BAT ${cap}%="
+	else echo "BAT ${cap}%"; fi
+}
+
 sampler() {
 	while true; do
 		cpu="$(cpu_usage)"
