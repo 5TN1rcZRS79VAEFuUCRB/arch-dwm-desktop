@@ -3,7 +3,6 @@
 
 # --- build tools + libraries for dwm / st / dmenu ---
 base-devel
-libx11
 libxft
 libxinerama
 
@@ -14,7 +13,6 @@ xorg-xrandr
 xorg-xrdb
 xorg-xset
 xorg-xsetroot
-dbus
 
 # --- fonts (dwm, st and dmenu all resolve to DejaVu Sans Mono) ---
 ttf-dejavu
@@ -63,5 +61,4 @@ keepassxc
 syncthing        # keeps the KeePassXC database in sync between machines
 
 # --- Claude Code add-ons: the caveman proxy CLI is an npm package ---
-nodejs
 npm

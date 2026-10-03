@@ -68,6 +68,14 @@ place() { # src dest
 	install -Dm"$mode" "$src" "$dest"
 }
 
+# Root-owned files: an existing different one is kept next to it as .bak-<date>.
+sudo_place() { # src dest
+	cmp -s "$1" "$2" 2>/dev/null && return
+	[ -e "$2" ] && sudo cp -a "$2" "$2.bak-$(date +%Y%m%d-%H%M%S)"
+	sudo install -Dm644 "$1" "$2"
+	echo "Installed $2"
+}
+
 # ---------------------------------------------------------------- packages
 if [ "$DO_PACKAGES" -eq 1 ]; then
 	say "Installing packages (sudo password may be requested)"
@@ -165,12 +173,7 @@ if command -v firefox >/dev/null; then
 	fi
 	# Extensions (uBlock Origin) come from a system-wide Firefox policy, so they are installed
 	# automatically the next time Firefox starts. Needs root because it lives in /etc.
-	POLICY=/etc/firefox/policies/policies.json
-	if ! cmp -s firefox/policies.json "$POLICY" 2>/dev/null; then
-		[ -e "$POLICY" ] && sudo cp -a "$POLICY" "$POLICY.bak-$(date +%Y%m%d-%H%M%S)"
-		sudo install -Dm644 firefox/policies.json "$POLICY"
-		echo "Installed Firefox extension policy ($POLICY)"
-	fi
+	sudo_place firefox/policies.json /etc/firefox/policies/policies.json
 else
 	warn "firefox is not installed; skipping its settings"
 fi
@@ -192,11 +195,7 @@ for f in etc/X11/xorg.conf.d/*.conf; do
 	if [ "${f##*/}" = 20-amdgpu.conf ] && [ "$HAS_AMDGPU" -eq 0 ]; then
 		continue
 	fi
-	if ! cmp -s "$f" "$dest" 2>/dev/null; then
-		[ -e "$dest" ] && sudo cp -a "$dest" "$dest.bak-$(date +%Y%m%d-%H%M%S)"
-		sudo install -Dm644 "$f" "$dest"
-		echo "Installed $dest"
-	fi
+	sudo_place "$f" "$dest"
 done
 
 # ---------------------------------------------------------------- local hostnames (mDNS)
@@ -280,7 +279,6 @@ dconf_write() {
 }
 if command -v dconf >/dev/null; then
 	dconf_write /org/gnome/desktop/interface/color-scheme "'prefer-dark'" \
-		&& dconf_write /org/gnome/desktop/interface/gtk-theme "'Adwaita'" \
 		|| warn "could not write the dark preference; run: gsettings set org.gnome.desktop.interface color-scheme prefer-dark"
 else
 	warn "dconf is not installed; skipping the desktop dark preference"

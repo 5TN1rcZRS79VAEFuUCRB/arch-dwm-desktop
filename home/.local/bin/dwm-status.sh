@@ -11,20 +11,13 @@ CACHE="${XDG_RUNTIME_DIR:-$HOME/.cache}/dwm-status-cache"
 mkdir -p "$(dirname "$CACHE")"
 
 cpu_usage() {
-	read -r _ a b c idle _ < /proc/stat
-	total1=$((a + b + c + idle))
-	idle1=$idle
+	local a b c i1 i2 t1 t2
+	read -r _ a b c i1 _ < /proc/stat
+	t1=$((a + b + c + i1))
 	sleep 0.5
-	read -r _ a b c idle _ < /proc/stat
-	total2=$((a + b + c + idle))
-	idle2=$idle
-	total_diff=$((total2 - total1))
-	idle_diff=$((idle2 - idle1))
-	if [ "$total_diff" -gt 0 ]; then
-		echo $(((100 * (total_diff - idle_diff)) / total_diff))
-	else
-		echo 0
-	fi
+	read -r _ a b c i2 _ < /proc/stat
+	t2=$((a + b + c + i2))
+	echo $((t2 > t1 ? 100 * ((t2 - t1) - (i2 - i1)) / (t2 - t1) : 0))
 }
 
 # Intel reports "Package id 0", AMD reports Tctl/Tdie; prints nothing if neither exists.

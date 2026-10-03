@@ -54,7 +54,6 @@ list_entries() {
 
 pick() {
 	local label="${1#[* ] }" name desc target=""
-	label="${label# }"
 	while IFS=$'\t' read -r name desc; do
 		[ "$desc" = "$label" ] && { target="$name"; break; }
 	done < <(devices)
