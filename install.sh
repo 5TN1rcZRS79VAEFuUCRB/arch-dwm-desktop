@@ -18,8 +18,7 @@ Usage: ./install.sh [options]
 
   --dpi N         display scaling: 96 (100%), 120, 144 (150%), 168, 192 (200%).
                   Default: on a re-run, the value already in ~/.Xresources;
-                  on a first install, worked out from your monitor's size,
-                  otherwise 96.
+                  on a first install, 96.
   --steam         also install Steam (needs the [multilib] repo enabled in
                   /etc/pacman.conf) and the matching 32-bit graphics libraries
   --no-packages   skip the pacman step
@@ -84,51 +83,13 @@ if [ "$DO_PACKAGES" -eq 1 ]; then
 fi
 
 # ---------------------------------------------------------------- display scaling
-# Reads each connected screen's EDID from the kernel (works from the console, before X runs),
-# preferring the laptop panel (eDP/LVDS).
-# A laptop panel is read from much closer than a desktop monitor, so its physical DPI is
-# scaled by 3/4: the T14's 161 DPI panel gets 120 (125%), not 168.
-detect_dpi() {
-	python3 -c '
-import glob, os, re, sys
-LAPTOP = 0.75
-best = None
-for conn in sorted(glob.glob("/sys/class/drm/card*-*")):
-    try:
-        if open(conn + "/status").read().strip() != "connected":
-            continue
-        edid = open(conn + "/edid", "rb").read()
-    except OSError:
-        continue
-    dtd = edid[54:72]  # first detailed timing: native resolution and size in mm
-    if len(dtd) < 18 or dtd[0] == dtd[1] == 0:
-        continue
-    px = dtd[2] | (dtd[4] & 0xF0) << 4
-    mm = dtd[12] | (dtd[14] & 0xF0) << 4
-    if px and mm:
-        internal = re.search(r"-(eDP|LVDS)", os.path.basename(conn))
-        if best is None or internal:
-            best = px * 25.4 / mm * (LAPTOP if internal else 1)
-if best is None:
-    sys.exit(1)
-print(min([96, 120, 144, 168, 192], key=lambda s: abs(s - best)))'
-}
-
 # On a re-run keep the DPI already in ~/.Xresources, so a scaling picked by hand (or with an
-# earlier --dpi) is not replaced by the detected one. Only a first install detects it.
+# earlier --dpi) is not replaced. A first install uses 96 unless --dpi says otherwise.
 if [ -z "$DPI" ] && [ -f "$HOME/.Xresources" ]; then
 	DPI="$(awk '/^Xft\.dpi:/{ if (int($2) > 0) print int($2); exit }' "$HOME/.Xresources")"
 	[ -n "$DPI" ] && say "Keeping your current display scaling: ${DPI} DPI (change it with --dpi N)"
 fi
-if [ -z "$DPI" ]; then
-	if DPI="$(detect_dpi 2>/dev/null)" && [ -n "$DPI" ]; then
-		say "Detected display scaling: ${DPI} DPI"
-	else
-		DPI=96
-		warn "could not detect your monitor's size; using 96 DPI."
-		warn "on a 4K screen rerun with e.g.  ./install.sh --no-packages --no-build --dpi 144"
-	fi
-fi
+DPI="${DPI:-96}"
 case "$DPI" in ''|*[!0-9]*) die "--dpi must be a number, got '$DPI'" ;; esac
 
 # ---------------------------------------------------------------- dotfiles + scripts
@@ -216,26 +177,6 @@ if [ -e /usr/lib/libnss_mdns_minimal.so.2 ]; then
 else
 	warn "nss-mdns is not installed; skipping .local hostnames"
 fi
-
-# ---------------------------------------------------------------- KeePassXC theme
-say "KeePassXC: dark theme"
-KP="$HOME/.config/keepassxc/keepassxc.ini"
-mkdir -p "$(dirname "$KP")"
-python3 - "$KP" <<'EOF'
-import os, sys
-p = sys.argv[1]
-lines = open(p).read().split("\n") if os.path.exists(p) else []
-for i, l in enumerate(lines):
-    if l.startswith("ApplicationTheme="):
-        lines[i] = "ApplicationTheme=dark"
-        break
-else:
-    if "[GUI]" in lines:
-        lines.insert(lines.index("[GUI]") + 1, "ApplicationTheme=dark")
-    else:
-        lines += ["[GUI]", "ApplicationTheme=dark"]
-open(p, "w").write("\n".join(lines).rstrip("\n") + "\n")
-EOF
 
 # ---------------------------------------------------------------- Syncthing (KeePassXC sync)
 # Only the service is set up here. Device keys and the folder/device pairing live in

@@ -45,9 +45,6 @@ if command -v nvidia-smi >/dev/null; then
 		done &
 	GPU_READER=$!
 fi
-gpu_stats() {
-	[ -r "$GPU_FILE" ] && cat "$GPU_FILE"
-}
 
 # Laptops only (prints nothing without a battery): "BAT 87%", with a + while charging, an = when
 # held at a charge limit, and a ! when it is low. Details and power profiles: Mod+Shift+P (dwm-power).
@@ -76,7 +73,7 @@ sampler() {
 		cpu="$(cpu_usage)"
 		ctemp="$(cpu_temp)"
 		ram="$(ram_usage)"
-		gpu="$(gpu_stats)"
+		gpu="$(cat "$GPU_FILE" 2>/dev/null)"
 		bat="$(battery_text)"
 		echo "${cpu}|${ctemp}|${ram}|${gpu}|${bat}" > "$CACHE.tmp"
 		mv "$CACHE.tmp" "$CACHE"

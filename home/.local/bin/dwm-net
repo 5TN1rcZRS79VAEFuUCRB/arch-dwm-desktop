@@ -2,7 +2,7 @@
 """
 dwm-net: choose which network to use, from dmenu (needs NetworkManager).
 
-  dwm-net menu    pick a Wi-Fi network, a wired connection or an action
+  dwm-net    pick a Wi-Fi network, a wired connection or an action
 
 Choosing a Wi-Fi network connects to it. A network you have not used before that needs a
 password opens a small terminal running `nmcli --ask`, so the password is never shown on
@@ -11,7 +11,6 @@ screen. Bound to Mod+N in dwm's config.h.
 import shlex
 import shutil
 import subprocess
-import sys
 import time
 
 DMENU = ["dmenu", "-i", "-l", "14"]
@@ -228,13 +227,5 @@ def run_menu():
             return
 
 
-def main():
-    if sys.argv[1:] == ["menu"]:
-        run_menu()
-    else:
-        print(__doc__, file=sys.stderr)
-        sys.exit(2)
-
-
 if __name__ == "__main__":
-    main()
+    run_menu()

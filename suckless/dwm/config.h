@@ -76,8 +76,8 @@ static const char *inmenucmd[]  = { AUDIO, "menu", "in",     NULL };
 static const char *brightupcmd[]   = { "brightnessctl", "-q", "set", "5%+", NULL };
 static const char *brightdowncmd[] = { "brightnessctl", "-q", "set", "5%-", NULL };
 static const char *traymenucmd[] = { "dwm-tray", "menu", NULL };
-static const char *netmenucmd[]   = { "dwm-net", "menu", NULL };
-static const char *powermenucmd[] = { "dwm-power", "menu", NULL };
+static const char *netmenucmd[]   = { "dwm-net", NULL };
+static const char *powermenucmd[] = { "dwm-power", NULL };
 static const char *shotcmd[]     = { "dwm-shot", NULL };
 static const char *shotareacmd[] = { "dwm-shot", "area", NULL };
 

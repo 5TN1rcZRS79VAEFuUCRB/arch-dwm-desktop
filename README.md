@@ -22,7 +22,7 @@ doesn't (other console, or you exited X), run `startx`.
 
 | Option | What it does |
 | --- | --- |
-| `--dpi N` | Display scaling: `96` (100%), `120`, `144` (150%), `168`, `192` (200%). By default a re-run keeps the value already in `~/.Xresources`, so scaling you picked stays put; a first install works it out from your monitor's physical size (read from the kernel if X isn't running yet; a laptop's built-in panel is scaled down a quarter since you sit closer to it, so a 14" 1920×1200 laptop gets 120), otherwise 96. |
+| `--dpi N` | Display scaling: `96` (100%), `120`, `144` (150%), `168`, `192` (200%). By default a re-run keeps the value already in `~/.Xresources`, so scaling you picked stays put; a first install uses 96. |
 | `--steam` | Also install Steam plus the matching 32-bit graphics libraries. Needs `[multilib]` enabled in `/etc/pacman.conf`. |
 | `--no-packages` | Skip the pacman step. |
 | `--no-build` | Skip compiling and installing dwm/st/dmenu. |
@@ -30,8 +30,7 @@ doesn't (other console, or you exited X), run `startx`.
 Re-running the installer is safe. Anything it would overwrite is copied to
 `~/.desktop-backup/<timestamp>/` first.
 
-If it guessed the scaling wrong (it can't see your monitor when run from a text console), fix it
-without reinstalling anything: `./install.sh --no-packages --no-build --dpi 144`, then log out
+Text too small (e.g. a 4K or laptop screen)? Change the scaling without reinstalling anything: `./install.sh --no-packages --no-build --dpi 144`, then log out
 of X and run `startx` again.
 
 ## What gets installed
@@ -47,7 +46,6 @@ of X and run `startx` again.
 | Always-visible userscript (`firefox/always-visible.user.js`) — makes pages act focused/visible in the background. Imported into Violentmonkey by hand once (a policy can't seed its scripts) | Violentmonkey |
 | Xorg: touchpad tap-to-click (one finger left, two right, three middle); on AMD GPUs only, AMD's driver (`xf86-video-amdgpu`) with TearFree | `/etc/X11/xorg.conf.d/` (needs sudo) |
 | `.local` hostnames over mDNS (`ssh user@machine.local`): Avahi enabled, `mdns_minimal` added to the `hosts:` line | `/etc/nsswitch.conf` (needs sudo) |
-| KeePassXC dark theme | `~/.config/keepassxc/keepassxc.ini` (only that one setting) |
 | Syncthing (keeps the KeePassXC database in sync), started now and at every login | `systemctl --user enable syncthing`. Pair devices and share the folder yourself at http://127.0.0.1:8384; keys are never in this repo |
 | Desktop-wide "prefer dark" | dconf (`org.gnome.desktop.interface`) |
 | git commit name and email (GitHub noreply address) | `~/.gitconfig` (only `user.name` and `user.email`) |

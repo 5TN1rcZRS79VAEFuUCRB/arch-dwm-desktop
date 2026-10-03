@@ -2,16 +2,14 @@
 """
 dwm-power: battery details and power profile, from dmenu (for laptops).
 
-  dwm-power menu    show battery level, time left, power draw and health;
-                    pick a power profile to switch to it (needs power-profiles-daemon)
+  dwm-power    show battery level, time left, power draw and health;
+               pick a power profile to switch to it (needs power-profiles-daemon)
 
 The battery percentage in the bar comes from dwm-status.sh. Bound to Mod+Shift+P in dwm's config.h.
 """
 import glob
-import os
 import shutil
 import subprocess
-import sys
 
 DMENU = ["dmenu", "-i", "-l", "12"]
 PS = "/sys/class/power_supply"
@@ -34,7 +32,7 @@ def number(path):
 
 
 def batteries():
-    return [d for d in sorted(glob.glob(os.path.join(PS, "BAT*"))) if read(os.path.join(d, "type")) == "Battery"]
+    return sorted(glob.glob(PS + "/BAT*"))
 
 
 def on_ac():
@@ -127,13 +125,5 @@ def run_menu():
             subprocess.run(["powerprofilesctl", "set", action[1]], capture_output=True, timeout=10)
 
 
-def main():
-    if sys.argv[1:] == ["menu"]:
-        run_menu()
-    else:
-        print(__doc__, file=sys.stderr)
-        sys.exit(2)
-
-
 if __name__ == "__main__":
-    main()
+    run_menu()
