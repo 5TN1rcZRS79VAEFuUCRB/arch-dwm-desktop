@@ -17,7 +17,9 @@ usage() {
 Usage: ./install.sh [options]
 
   --dpi N         display scaling: 96 (100%), 120, 144 (150%), 168, 192 (200%).
-                  Default: worked out from your monitor's size, otherwise 96.
+                  Default: on a re-run, the value already in ~/.Xresources;
+                  on a first install, worked out from your monitor's size,
+                  otherwise 96.
   --steam         also install Steam (needs the [multilib] repo enabled in
                   /etc/pacman.conf) and the matching 32-bit graphics libraries
   --no-packages   skip the pacman step
@@ -76,14 +78,19 @@ fi
 # ---------------------------------------------------------------- display scaling
 # Uses xrandr when X is running. A fresh install usually runs from the console, so otherwise
 # it reads each connected screen's EDID from the kernel, preferring the laptop panel (eDP/LVDS).
+# A laptop panel is read from much closer than a desktop monitor, so its physical DPI is
+# scaled by 3/4: the T14's 161 DPI panel gets 120 (125%), not 168.
 detect_dpi() {
 	{ [ -z "${DISPLAY:-}" ] || xrandr --current 2>/dev/null || true; } | python3 -c '
 import glob, os, re, sys
+LAPTOP = 0.75
 best = None
 for line in sys.stdin:
     m = re.match(r"^(\S+) connected( primary)? (\d+)x(\d+)\+\d+\+\d+ .*? (\d+)mm x (\d+)mm", line)
     if m and int(m.group(5)) > 0:
         dpi = int(m.group(3)) * 25.4 / int(m.group(5))
+        if re.match(r"(eDP|LVDS)", m.group(1)):
+            dpi *= LAPTOP
         if best is None or m.group(2):
             best = dpi
 if best is None:
@@ -102,12 +109,18 @@ if best is None:
         if px and mm:
             internal = re.search(r"-(eDP|LVDS)", os.path.basename(conn))
             if best is None or internal:
-                best = px * 25.4 / mm
+                best = px * 25.4 / mm * (LAPTOP if internal else 1)
 if best is None:
     sys.exit(1)
 print(min([96, 120, 144, 168, 192], key=lambda s: abs(s - best)))'
 }
 
+# On a re-run keep the DPI already in ~/.Xresources, so a scaling picked by hand (or with an
+# earlier --dpi) is not replaced by the detected one. Only a first install detects it.
+if [ -z "$DPI" ] && [ -f "$HOME/.Xresources" ]; then
+	DPI="$(awk '/^Xft\.dpi:/{ if (int($2) > 0) print int($2); exit }' "$HOME/.Xresources")"
+	[ -n "$DPI" ] && say "Keeping your current display scaling: ${DPI} DPI (change it with --dpi N)"
+fi
 if [ -z "$DPI" ]; then
 	if DPI="$(detect_dpi 2>/dev/null)" && [ -n "$DPI" ]; then
 		say "Detected display scaling: ${DPI} DPI"

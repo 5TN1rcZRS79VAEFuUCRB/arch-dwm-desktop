@@ -22,7 +22,7 @@ doesn't (other console, or you exited X), run `startx`.
 
 | Option | What it does |
 | --- | --- |
-| `--dpi N` | Display scaling: `96` (100%), `120`, `144` (150%), `168`, `192` (200%). By default it is worked out from your monitor's physical size (read from the kernel if X isn't running yet), otherwise 96. |
+| `--dpi N` | Display scaling: `96` (100%), `120`, `144` (150%), `168`, `192` (200%). By default a re-run keeps the value already in `~/.Xresources`, so scaling you picked stays put; a first install works it out from your monitor's physical size (read from the kernel if X isn't running yet; a laptop's built-in panel is scaled down a quarter since you sit closer to it, so a 14" 1920×1200 laptop gets 120), otherwise 96. |
 | `--steam` | Also install Steam plus the matching 32-bit graphics libraries. Needs `[multilib]` enabled in `/etc/pacman.conf`. |
 | `--no-packages` | Skip the pacman step. |
 | `--no-build` | Skip compiling and installing dwm/st/dmenu. |
