@@ -39,16 +39,18 @@ TOKEN = f"{HOME}/.canvas_token"
 DATA = os.path.join(os.environ.get("XDG_DATA_HOME", f"{HOME}/.local/share"), "dwm-school")
 RUN = os.environ.get("XDG_RUNTIME_DIR", f"{HOME}/.cache")
 BAR = f"{RUN}/dwm-school-bar"      # one line, read by dwm-status.sh
-FOCUS = f"{RUN}/dwm-school-focus"  # "<end epoch> <title>", read by dwm-status.sh
+FOCUS = f"{RUN}/dwm-school-focus"  # "<end epoch> <icon> <text>": the running focus/break timer, read by dwm-status.sh
 DMENU = ["dmenu", "-i", "-l", "15"]
 
 LOOKBACK = 14 * 86400  # overdue work older than this drops off the list
 AHEAD = 60 * 86400
 SYNC_EVERY = 300
 FOCUS_SECS = 600
+REST_SECS = 300
 REMIND = [3 * 86400, 86400, 3 * 3600]  # seconds before due, longest first
 PTS = {"done": 10, "late": 3, "missing": -5}
 # Bar icons (Symbols Nerd Font): graduation cap, warning, coffee, star, flame
+TIMER = "󰔛"
 CAP, WARN, COFFEE, STAR, FIRE = "", "", "󰅶", "", "󰈸"
 LATE_FIRST = 2 * 86400  # nothing due within this long: late work moves to the top
 BREAK = 3 * 86400  # nothing late and nothing due within this long: a break (ends when the 3-day reminder fires)
@@ -383,19 +385,41 @@ def focus_end():
         return 0
 
 
-def focus(t):
-    end = int(time.time()) + FOCUS_SECS
-    write(FOCUS, f"{end} {t['title']}\n")
-    notify(f"Focus 10 min: {t['title']}", "Just start. It doesn't have to be good yet.")
-    time.sleep(FOCUS_SECS)
-    if focus_end() != end:  # stopped, or another session replaced this one
-        return
+def open_url(t):
+    if t["url"].startswith("https://"):
+        subprocess.Popen(["xdg-open", t["url"]], start_new_session=True)
+
+
+def timer(secs, icon, text):
+    """Count down in the bar. False if it was stopped or another timer replaced it."""
+    end = int(time.time()) + secs
+    write(FOCUS, f"{end} {icon} {text}\n")
+    time.sleep(secs)
+    if focus_end() != end:
+        return False
     os.remove(FOCUS)
-    with state() as s:
-        s["focus_pts"] += 2
-        pts = total(s)
-    notify("Focus done: +2 pts", f"{pts} pts. Keep going, or take 5 and start another.", urgent=True)
-    tick()
+    return True
+
+
+def focus(t):
+    """Open the assignment and run 10-minute sessions, asking after each: more, a break, or done."""
+    open_url(t)
+    notify(f"Focus 10 min: {t['title']}", "Just start. It doesn't have to be good yet.")
+    # "10 more minutes" is listed first: an Enter typed into the essay as dmenu pops up keeps you going.
+    after_focus = [("10 more minutes", "more"), ("5-minute break", "rest"), ("Done", "done")]
+    after_rest = [("Back to it: 10 minutes", "more"), ("Done for now", "done")]
+    while timer(FOCUS_SECS, TIMER, short(t["title"])):
+        with state() as s:
+            s["focus_pts"] += 2
+            pts = total(s)
+        tick()
+        nxt = dmenu(after_focus, f"+2 pts ({pts}). Next?")
+        if nxt == "rest":
+            if not timer(REST_SECS, COFFEE, "break"):
+                return
+            nxt = dmenu(after_rest, f"Break's over: {short(t['title'], 40)}")
+        if nxt != "more":
+            return
 
 
 def dmenu(rows, prompt):
@@ -413,7 +437,7 @@ def run_menu():
         prompt = f"{total(s)}pt streak {streak(s)}"
     rows = []
     if focus_end() > now:
-        rows.append(("Stop focus timer", ("stop", None)))
+        rows.append(("Stop timer", ("stop", None)))
     elif items:
         rows.append((f">> Start 10-min focus: {items[0]['title']}", ("focus", items[0])))
     rows += [(f"{left(t['due'] - now):>8}  {t['course'] or 'Schoology'}: {t['title']}", ("task", t)) for t in items]
@@ -428,8 +452,8 @@ def run_menu():
         focus(t)
     elif act == "stop":
         os.remove(FOCUS)
-    elif act == "open" and t["url"].startswith("https://"):
-        subprocess.Popen(["xdg-open", t["url"]], start_new_session=True)
+    elif act == "open":
+        open_url(t)
     elif act == "sync":
         sync()
     elif act == "done":

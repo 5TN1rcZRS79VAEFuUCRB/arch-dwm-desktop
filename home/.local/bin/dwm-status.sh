@@ -112,10 +112,11 @@ while true; do
 	[ -n "$gpu_util" ] && stats+=" | 󰪭 ${gpu_util}% ${gpu_temp}°"
 
 	hw=""; read -r hw < "$SCHOOL_BAR" 2>/dev/null
-	fend=0; read -r fend _ < "$SCHOOL_FOCUS" 2>/dev/null
+	# A running focus or break timer replaces the next-assignment text: "<icon> 7:32 <task>".
+	fend=0; read -r fend ficon ftext < "$SCHOOL_FOCUS" 2>/dev/null
 	if [ "${fend:-0}" -gt "$EPOCHSECONDS" ] 2>/dev/null; then
 		left=$((fend - EPOCHSECONDS))
-		printf -v hw '󰔛 %d:%02d | %s' $((left / 60)) $((left % 60)) "$hw"
+		printf -v hw '%s %d:%02d %s' "$ficon" $((left / 60)) $((left % 60)) "$ftext"
 	fi
 
 	xsetroot -name "${hw:+ $hw |}${stats} |  ${ram:-?}${bat:+ | $bat} | ${vol:- ?} | ${clock} "
