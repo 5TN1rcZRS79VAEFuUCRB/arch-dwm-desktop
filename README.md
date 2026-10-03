@@ -39,8 +39,8 @@ of X and run `startx` again.
 | --- | --- |
 | dwm, st, dmenu (built from the sources in `suckless/`) | `~/.local/src/` and `/usr/local/bin/` |
 | `.xinitrc`, `.Xresources` (scaling, cursor), `.bash_profile` (starts X when you log in on tty1) | `~/` |
-| Bar, audio, tray, network (`dwm-net`), battery (`dwm-power`) and screenshot scripts, the idle screen-off (`dwm-blank`), plus a `keepassxc` launcher (slightly smaller text at high DPI) | `~/.local/bin/` |
-| GTK 3/4, Qt 5/6 and xdg-portal dark-mode config | `~/.config/` |
+| Bar, audio, tray, network (`dwm-net`), battery (`dwm-power`), school assignments (`dwm-school`) and screenshot scripts, the idle screen-off (`dwm-blank`), plus a `keepassxc` launcher (slightly smaller text at high DPI) | `~/.local/bin/` |
+| GTK 3/4, Qt 5/6 and xdg-portal dark-mode config, minimal dunst notifications in the bar's colors | `~/.config/` |
 | Firefox settings: dark mode, privacy, no AI or sponsored content (`user.js`) | your Firefox profile directory |
 | Firefox extensions: uBlock Origin and Violentmonkey, installed by a policy (`policies.json`) | `/etc/firefox/policies/` (needs sudo) |
 | Always-visible userscript (`firefox/always-visible.user.js`) — makes pages act focused/visible in the background. Imported into Violentmonkey by hand once (a policy can't seed its scripts) | Violentmonkey |
@@ -75,6 +75,7 @@ Packages are listed in `packages.txt`.
 | **Tray apps menu** | `Mod+Shift+T`, or right-click the window title in the bar |
 | **Network picker** | `Mod+N` |
 | **Battery details / power profile** | `Mod+Shift+P` |
+| **School assignments: next task, 10-minute focus timer, open / mark done** | `Mod+A` |
 | **Screenshot: whole screen / drag an area** | `Print` / `Shift+Print` |
 
 On the status bar text itself:
@@ -119,11 +120,40 @@ Turn it on with `sudo systemctl enable --now NetworkManager`; join Wi-Fi the fir
 
 ## Battery (laptops)
 
-On a machine with a battery the bar shows `BAT 87%`, with `+` while charging, `=` when the charge
+On a machine with a battery the bar shows a battery icon and `87%`, with `+` while charging, `=` when the charge
 limit is holding it, and `!` when it is at 15% or below. Nothing is shown on a desktop.
 `Mod+Shift+P` opens a dmenu list with the time left (or until full), power draw, battery health,
 any charge limit and, if `power-profiles-daemon` is installed, the power profile, which you can
 switch by choosing one.
+
+## School assignments
+
+`dwm-school` puts the next Canvas or Schoology assignment at the left of the status text (title and
+time left, how many are late, points and streak) and sends reminders 3 days, 1 day and 3 hours before
+each due date, plus a summary every morning. `Mod+A` opens a dmenu list: start a 10-minute focus timer
+(it counts down in the bar), open an assignment in the browser, or mark Schoology work done.
+
+Points: Canvas work on time +10, late +3, missing -5 (Canvas reports which). Schoology's feed has no
+submission status, so you mark that work done yourself (on time +10, late +3, no penalty). A finished
+focus session is +2. Upcoming work comes first, Canvas before Schoology on the same day; when nothing is
+due within 2 days, late work moves to the top.
+
+It needs two things that are never in this repo:
+
+* `~/.canvas_token`: Canvas → Account → Settings → **New Access Token** (chmod 600)
+* `~/.config/dwm-school.conf`:
+
+  ```
+  canvas_url=https://yourschool.instructure.com
+  canvas_token_expires=2027-01-01
+  schoology_ics=webcal://...
+  ```
+
+  The Schoology link is Calendar → Export iCal Feed → Share Calendar (turn on the public calendar feed
+  in account settings first). `canvas_token_expires` is optional and gives a daily warning in the token's
+  last week.
+
+Then run `dwm-school sync` to check it. `dwm-school selftest` checks the parser and scoring.
 
 ## Screenshots
 
@@ -153,7 +183,7 @@ screen saver are honoured, because `dwm-blank` follows the X server's own saver 
 * **Monitor refresh rate and G-SYNC.** These depend on the monitor and output name, so `.xinitrc`
   only has a commented-out `xrandr` example to edit.
 * **All server software** (Jellyfin, Radarr/Sonarr, Docker, Cloudflare and so on) and any
-  passwords or API keys.
+  passwords or API keys, including the Canvas token and Schoology feed link for `dwm-school`.
 
 ## Updating this repo
 

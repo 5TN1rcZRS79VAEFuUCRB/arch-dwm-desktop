@@ -5,7 +5,8 @@ static const unsigned int borderpx  = 1;        /* border pixel of windows */
 static const unsigned int snap      = 32;       /* snap pixel */
 static const int showbar            = 1;        /* 0 means no bar */
 static const int topbar             = 1;        /* 0 means bottom bar */
-static const char *fonts[]          = { "monospace:size=10" };
+static const int barpad = 8; /* extra bar height in px; keep dwm and dmenu equal so dmenu covers the bar exactly */
+static const char *fonts[]          = { "monospace:size=10", "Symbols Nerd Font Mono:size=10" };
 static const char col_gray1[]       = "#222222";
 static const char col_gray2[]       = "#444444";
 static const char col_gray3[]       = "#bbbbbb";
@@ -78,6 +79,7 @@ static const char *brightdowncmd[] = { "brightnessctl", "-q", "set", "5%-", NULL
 static const char *traymenucmd[] = { "dwm-tray", "menu", NULL };
 static const char *netmenucmd[]   = { "dwm-net", NULL };
 static const char *powermenucmd[] = { "dwm-power", NULL };
+static const char *schoolcmd[]    = { "dwm-school", "menu", NULL };
 static const char *shotcmd[]     = { "dwm-shot", NULL };
 static const char *shotareacmd[] = { "dwm-shot", "area", NULL };
 
@@ -117,6 +119,7 @@ static const Key keys[] = {
 	{ MODKEY|ShiftMask,             XK_t,      spawn,          {.v = traymenucmd } },
 	{ MODKEY,                       XK_n,      spawn,          {.v = netmenucmd } },
 	{ MODKEY|ShiftMask,             XK_p,      spawn,          {.v = powermenucmd } },
+	{ MODKEY,                       XK_a,      spawn,          {.v = schoolcmd } },
 	{ 0,                            XK_Print,  spawn,          {.v = shotcmd } },
 	{ ShiftMask,                    XK_Print,  spawn,          {.v = shotareacmd } },
 	{ 0,                            XF86XK_AudioRaiseVolume, spawn, {.v = volupcmd } },

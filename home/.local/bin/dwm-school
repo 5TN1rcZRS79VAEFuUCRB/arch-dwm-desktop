@@ -1,0 +1,475 @@
+#!/usr/bin/env python3
+"""
+dwm-school: Canvas + Schoology assignments in the dwm bar, with points, a streak and reminders.
+
+  dwm-school daemon    sync every 5 min, refresh the bar and send reminders every minute (~/.xinitrc)
+  dwm-school sync      sync once and print the bar text and any errors
+  dwm-school menu      dmenu: next task, 10-minute focus timer, open / mark done (Mod+a in config.h)
+  dwm-school selftest  check the feed parser, ordering and scoring
+
+Setup:
+  ~/.canvas_token            Canvas access token (Account > Settings > New Access Token), chmod 600
+  ~/.config/dwm-school.conf  canvas_url=https://yourschool.instructure.com
+                             canvas_token_expires=2027-01-01  (warns daily in the last week)
+                             schoology_ics=webcal://...  (Schoology calendar export link)
+
+Points: Canvas on time +10, late +3, missing -5 (Canvas reports which, nothing due before the first
+sync counts). Schoology's feed has no submission status, so you mark those done yourself from the
+menu: on time +10, late +3, no penalty. A finished focus session is +2. The streak is on-time work
+in a row. Reminders go out 3 days, 1 day and 3 hours before a due date, plus a summary each morning.
+"""
+import fcntl
+import math
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from urllib.parse import urlencode
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
+from zoneinfo import ZoneInfo
+
+HOME = os.path.expanduser("~")
+CONF = f"{HOME}/.config/dwm-school.conf"
+TOKEN = f"{HOME}/.canvas_token"
+DATA = os.path.join(os.environ.get("XDG_DATA_HOME", f"{HOME}/.local/share"), "dwm-school")
+RUN = os.environ.get("XDG_RUNTIME_DIR", f"{HOME}/.cache")
+BAR = f"{RUN}/dwm-school-bar"      # one line, read by dwm-status.sh
+FOCUS = f"{RUN}/dwm-school-focus"  # "<end epoch> <title>", read by dwm-status.sh
+DMENU = ["dmenu", "-i", "-l", "15"]
+
+LOOKBACK = 14 * 86400  # overdue work older than this drops off the list
+AHEAD = 60 * 86400
+SYNC_EVERY = 300
+FOCUS_SECS = 600
+REMIND = [3 * 86400, 86400, 3 * 3600]  # seconds before due, longest first
+PTS = {"done": 10, "late": 3, "missing": -5}
+LATE_FIRST = 2 * 86400  # nothing due within this long: late work moves to the top
+
+
+# ---- storage ----
+
+def load(name, default):
+    # Only a missing file falls back to the default: a corrupt state.json must not silently zero the points.
+    try:
+        with open(f"{DATA}/{name}") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return default
+
+
+def write(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + ".tmp", "w") as f:
+        f.write(text)
+    os.replace(path + ".tmp", path)
+
+
+@contextmanager
+def state():
+    """Load, modify and save state.json under a lock (the daemon, menu and focus timer all write it)."""
+    os.makedirs(DATA, exist_ok=True)
+    with open(f"{DATA}/lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        s = load("state.json", {})
+        for k, v in {"scores": {}, "hidden": [], "reminded": [], "focus_pts": 0}.items():
+            s.setdefault(k, v)
+        yield s
+        write(f"{DATA}/state.json", json.dumps(s))
+
+
+def config():
+    conf = {}
+    try:
+        with open(CONF) as f:
+            for line in f:
+                k, sep, v = line.strip().partition("=")
+                if sep and not k.startswith("#"):
+                    conf[k.strip()] = v.strip()
+    except FileNotFoundError:
+        pass
+    return conf
+
+
+# ---- fetching ----
+
+def course_name(name):
+    """'202660_1_ON_ENGL101_60413' -> 'ENGL101'; names without a course code stay as they are."""
+    m = re.search(r"(?<![A-Z])[A-Z]{2,5} ?\d{3}[A-Z]?(?!\d)", name)
+    return m.group(0) if m else name
+
+
+def canvas_tasks(base):
+    base = base.rstrip("/")
+    if not base.startswith("https://"):
+        raise ValueError("canvas_url must start with https://")
+    with open(TOKEN) as f:
+        token = f.read().strip()
+    now = time.time()
+    iso = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    url = f"{base}/api/v1/planner/items?" + urlencode(
+        {"start_date": iso(now - LOOKBACK), "end_date": iso(now + AHEAD), "per_page": 100})
+    tasks = []
+    while url:
+        if not url.startswith(base + "/"):
+            raise ValueError(f"refusing to send the Canvas token to {url}")
+        with urlopen(Request(url, headers={"Authorization": f"Bearer {token}"}), timeout=30) as r:
+            items = json.load(r)
+            m = re.search(r'<([^>]+)>;\s*rel="next"', r.headers.get("Link", ""))
+            url = m and m.group(1)
+        for it in items:
+            sub, p = it.get("submissions"), it.get("plannable") or {}
+            due = p.get("due_at") or it.get("plannable_date")
+            # Announcements and calendar events have no submission; excused work doesn't count.
+            if not isinstance(sub, dict) or not due or sub.get("excused"):
+                continue
+            due = datetime.fromisoformat(due).timestamp()
+            if sub.get("submitted") or sub.get("graded") or (it.get("planner_override") or {}).get("marked_complete"):
+                status = "late" if sub.get("late") else "done"
+            else:
+                status = "missing" if sub.get("missing") or due < now else "todo"
+            link = it.get("html_url") or ""
+            tasks.append({"id": f"c:{it['plannable_type']}:{it['plannable_id']}", "source": "canvas",
+                          "title": p.get("title") or p.get("name") or "?", "course": course_name(it.get("context_name") or ""),
+                          "due": due, "status": status, "url": base + link if link.startswith("/") else base})
+    return tasks
+
+
+def ics_time(params, val):
+    tz = next((p[5:] for p in params if p.startswith("TZID=")), None)
+    if len(val) == 8:  # all-day: due at the end of that day
+        return datetime.strptime(val, "%Y%m%d").replace(hour=23, minute=59).timestamp()
+    if val.endswith("Z"):
+        return datetime.strptime(val, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc).timestamp()
+    d = datetime.strptime(val, "%Y%m%dT%H%M%S")
+    return (d.replace(tzinfo=ZoneInfo(tz)) if tz else d).timestamp()  # naive = local time
+
+
+def parse_ics(text):
+    text = re.sub(r"\r?\n[ \t]", "", text)  # unfold continuation lines
+    events = []
+    for block in text.split("BEGIN:VEVENT")[1:]:
+        f = {}
+        for line in block.split("END:VEVENT")[0].splitlines():
+            key, _, val = line.partition(":")
+            name, *params = key.split(";")
+            f.setdefault(name.upper(), (params, val))
+        if "DTSTART" not in f:
+            continue
+        title = re.sub(r"\\(.)", lambda m: " " if m.group(1) in "nN" else m.group(1), f.get("SUMMARY", ([], "?"))[1])
+        events.append({"id": "s:" + f.get("UID", ([], title + f["DTSTART"][1]))[1], "source": "schoology",
+                       "title": title, "course": "", "due": ics_time(*f["DTSTART"]), "url": f.get("URL", ([], ""))[1]})
+    return events
+
+
+def schoology_tasks(feed):
+    if feed.startswith("/"):  # a downloaded .ics: a snapshot, so new assignments won't show up
+        with open(feed, encoding="utf-8", errors="replace") as f:
+            events = parse_ics(f.read())
+    else:
+        feed = re.sub(r"^webcal://", "https://", feed)
+        with urlopen(Request(feed, headers={"User-Agent": "dwm-school"}), timeout=30) as r:
+            events = parse_ics(r.read().decode("utf-8", "replace"))
+    now = time.time()
+    # Calendar events (fundraisers, meetings) link to /event/; everything else is work to turn in.
+    return [dict(e, url=re.sub(r"^http://", "https://", e["url"])) for e in events
+            if "/event/" not in e["url"] and now - LOOKBACK < e["due"] < now + AHEAD]
+
+
+def sync():
+    conf = config()
+    old = load("tasks.json", {"tasks": []})["tasks"]
+    tasks, errors = [], []
+    if not conf.get("canvas_url") and not conf.get("schoology_ics"):
+        errors.append(f"not set up: fill in {CONF}")
+    for source, key, fetch in (("canvas", "canvas_url", canvas_tasks), ("schoology", "schoology_ics", schoology_tasks)):
+        if not conf.get(key):
+            continue
+        try:
+            tasks += fetch(conf[key])
+        except Exception as e:  # offline or a bad token: keep showing the last good copy
+            expired = source == "canvas" and isinstance(e, HTTPError) and e.code == 401
+            errors.append("canvas: token expired or wrong, make a new one and update canvas_token_expires" if expired
+                          else f"{source}: {e}")
+            tasks += [t for t in old if t["source"] == source]
+    write(f"{DATA}/tasks.json", json.dumps({"tasks": tasks, "errors": errors}))
+    with state() as s:
+        s.setdefault("since", time.time())
+        for t in tasks:
+            if t["source"] == "canvas":
+                score_canvas(s, t)
+    return errors
+
+
+# ---- points ----
+
+def total(s):
+    return s["focus_pts"] + sum(v["pts"] for v in s["scores"].values())
+
+
+def streak(s):
+    n = 0
+    for v in sorted(s["scores"].values(), key=lambda v: -v["due"]):
+        if not v["on_time"]:
+            break
+        n += 1
+    return n
+
+
+def cheer(s, t, pts):
+    notify(f"+{pts} pts: {t['title']}", f"{total(s)} pts, streak {streak(s)}")
+
+
+def score_canvas(s, t):
+    if t["due"] < s["since"]:  # fresh start: nothing due before the first sync counts
+        return
+    old = s["scores"].get(t["id"])
+    if t["status"] not in PTS:
+        s["scores"].pop(t["id"], None)
+        return
+    s["scores"][t["id"]] = {"pts": PTS[t["status"]], "due": t["due"], "on_time": t["status"] == "done"}
+    if PTS[t["status"]] > 0 and (not old or old["pts"] <= 0):
+        cheer(s, t, PTS[t["status"]])
+
+
+def mark_done(t):
+    on_time = time.time() <= t["due"]
+    with state() as s:
+        s["scores"][t["id"]] = {"pts": 10 if on_time else 3, "due": t["due"], "on_time": on_time}
+        cheer(s, t, s["scores"][t["id"]]["pts"])
+
+
+# ---- what's next ----
+
+def todo(tasks, s, now):
+    """Unfinished work: upcoming first, by day, Canvas before Schoology on the same day; then overdue,
+    most recent first (likeliest to still be accepted). With nothing due soon, overdue goes first."""
+    keep = [t for t in tasks if t["id"] not in s["hidden"] and (
+        t["status"] in ("todo", "missing") if t["source"] == "canvas"
+        else t["id"] not in s["scores"] and t["due"] > now - 86400)]
+    day = lambda t: time.strftime("%Y%m%d", time.localtime(t["due"]))
+    items = sorted(keep, key=lambda t: (False, day(t), t["source"] != "canvas", t["due"]) if t["due"] >= now
+                   else (True, -t["due"]))
+    n = sum(t["due"] >= now for t in items)
+    if not n or items[0]["due"] - now > LATE_FIRST:
+        items = items[n:] + items[:n]
+    return items
+
+
+def left(secs):
+    s = abs(secs)
+    txt = f"{s // 86400:.0f}d" if s >= 86400 else f"{s // 3600:.0f}h" if s >= 3600 else f"{s // 60:.0f}m"
+    return f"{txt} late" if secs < 0 else txt
+
+
+def short(title, n=28):
+    return title if len(title) <= n else title[:n - 2] + ".."
+
+
+def bar_text(tasks, errors, s, now):
+    items = todo(tasks, s, now)
+    if items:
+        head = f"{short(items[0]['title'])} ({left(items[0]['due'] - now)})"
+    else:
+        head = "run dwm-school sync" if errors and not tasks else "all caught up"
+    parts = [(" " if errors else " ") + head]  # Nerd Font icons
+    n_late = sum(t["due"] < now for t in items)
+    if n_late:
+        parts.append(f"{n_late} late")
+    parts.append(f" {total(s)} 󰈸 {streak(s)}")
+    return " | ".join(parts)
+
+
+def notify(title, body="", urgent=False):
+    try:
+        subprocess.run(["notify-send", "-a", "dwm-school", "-u", "critical" if urgent else "normal", title, body],
+                       capture_output=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+def remind(s, items, now):
+    ids = {t["id"] for t in items}
+    s["reminded"] = [k for k in s["reminded"] if k.rsplit("@", 1)[0] in ids]
+    for t in items:
+        keys = [f"{t['id']}@{secs}" for secs in REMIND if 0 < t["due"] - now <= secs]
+        # One notification per threshold, even when the first sync crosses several at once.
+        if keys and keys[-1] not in s["reminded"]:
+            notify(f"Due in {left(t['due'] - now)}: {t['title']}", t["course"], urgent=t["due"] - now <= REMIND[-1])
+            s["reminded"] += [k for k in keys if k not in s["reminded"]]
+
+
+def summary(s, items, now):
+    today = time.strftime("%Y-%m-%d")
+    if s.get("summary_day") == today or time.localtime().tm_hour < 7:
+        return
+    s["summary_day"] = today
+    end_today = datetime.now().replace(hour=23, minute=59, second=59).timestamp()
+    week = [t for t in items if now <= t["due"] <= now + 7 * 86400]
+    n_today = sum(t["due"] <= end_today for t in week)
+    n_late = sum(t["due"] < now for t in items)
+    body = "\n".join(f"{left(t['due'] - now):>4}  {t['title']}" for t in week[:6]) or "Nothing due this week."
+    notify(f"{n_today} due today, {len(week)} this week, {n_late} late. {total(s)} pts", body)
+
+
+def token_warning(s, now):
+    """Canvas tokens at this school last at most 90 days: warn daily in the last week."""
+    exp, today = config().get("canvas_token_expires"), time.strftime("%Y-%m-%d")
+    if not exp or s.get("token_warned") == today:
+        return
+    days = (datetime.strptime(exp, "%Y-%m-%d").timestamp() - now) / 86400
+    if days <= 7:
+        s["token_warned"] = today
+        notify(f"Canvas token expires in {max(0, math.ceil(days))} days",
+               "Account > Settings > New Access Token, save it to ~/.canvas_token, update dwm-school.conf", urgent=True)
+
+
+def tick():
+    data = load("tasks.json", {"tasks": [], "errors": []})
+    now = time.time()
+    with state() as s:
+        items = todo(data["tasks"], s, now)
+        remind(s, items, now)
+        summary(s, items, now)
+        token_warning(s, now)
+        write(BAR, bar_text(data["tasks"], data["errors"], s, now) + "\n")
+
+
+def daemon():
+    os.makedirs(DATA, exist_ok=True)
+    lock = open(f"{DATA}/daemon.lock", "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        sys.exit("dwm-school daemon is already running")
+    last = 0
+    while True:
+        steps = [tick]
+        if time.time() - last >= SYNC_EVERY:  # failures wait for the next interval too
+            last = time.time()
+            steps = [sync, tick]
+        for step in steps:
+            try:
+                step()
+            except Exception as e:
+                print(f"dwm-school {step.__name__}: {e}", file=sys.stderr)
+        time.sleep(60)
+
+
+# ---- menu ----
+
+def focus_end():
+    try:
+        with open(FOCUS) as f:
+            return int(f.read().split()[0])
+    except (OSError, ValueError, IndexError):
+        return 0
+
+
+def focus(t):
+    end = int(time.time()) + FOCUS_SECS
+    write(FOCUS, f"{end} {t['title']}\n")
+    notify(f"Focus 10 min: {t['title']}", "Just start. It doesn't have to be good yet.")
+    time.sleep(FOCUS_SECS)
+    if focus_end() != end:  # stopped, or another session replaced this one
+        return
+    os.remove(FOCUS)
+    with state() as s:
+        s["focus_pts"] += 2
+        pts = total(s)
+    notify("Focus done: +2 pts", f"{pts} pts. Keep going, or take 5 and start another.", urgent=True)
+    tick()
+
+
+def dmenu(rows, prompt):
+    p = subprocess.run(DMENU + ["-p", prompt], input="\n".join(l for l, _ in rows) + "\n",
+                       capture_output=True, text=True)
+    choice = p.stdout.rstrip("\n")
+    return next((a for l, a in rows if l == choice), None) if p.returncode == 0 else None
+
+
+def run_menu():
+    tasks = load("tasks.json", {"tasks": []})["tasks"]
+    now = time.time()
+    with state() as s:
+        items = todo(tasks, s, now)
+        prompt = f"{total(s)}pt streak {streak(s)}"
+    rows = []
+    if focus_end() > now:
+        rows.append(("Stop focus timer", ("stop", None)))
+    elif items:
+        rows.append((f">> Start 10-min focus: {items[0]['title']}", ("focus", items[0])))
+    rows += [(f"{left(t['due'] - now):>8}  {t['course'] or 'Schoology'}: {t['title']}", ("task", t)) for t in items]
+    rows.append(("Sync now", ("sync", None)))
+    act, t = dmenu(rows, prompt) or (None, None)
+    if act == "task":
+        sub = [("Start 10-min focus", ("focus", t)), ("Open in browser", ("open", t))]
+        if t["source"] == "schoology":
+            sub += [("Mark done", ("done", t)), ("Hide (not an assignment)", ("hide", t))]
+        act, t = dmenu(sub, short(t["title"], 40)) or (None, None)
+    if act == "focus":
+        focus(t)
+    elif act == "stop":
+        os.remove(FOCUS)
+    elif act == "open" and t["url"].startswith("https://"):
+        subprocess.Popen(["xdg-open", t["url"]], start_new_session=True)
+    elif act == "sync":
+        sync()
+    elif act == "done":
+        mark_done(t)
+    elif act == "hide":
+        with state() as s:
+            s["hidden"].append(t["id"])
+    if act in ("sync", "done", "hide"):
+        tick()
+
+
+def selftest():
+    ics = ("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a1\r\nSUMMARY:Essay\\, part 1\r\n  cont\r\n"
+           "DTSTART:20261005T035900Z\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:a2\r\nSUMMARY:Quiz\r\n"
+           "DTSTART;VALUE=DATE:20261006\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:a3\r\nSUMMARY:Lab\r\n"
+           "DTSTART;TZID=America/New_York:20261007T080000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n")
+    e = parse_ics(ics)
+    assert [x["title"] for x in e] == ["Essay, part 1 cont", "Quiz", "Lab"], e
+    assert e[0]["due"] == datetime(2026, 10, 5, 3, 59, tzinfo=timezone.utc).timestamp()
+    assert e[1]["due"] == datetime(2026, 10, 6, 23, 59).timestamp()
+    assert e[2]["due"] == datetime(2026, 10, 7, 12, 0, tzinfo=timezone.utc).timestamp()
+
+    now = datetime(2026, 10, 5, 12, 0).timestamp()
+    t = lambda i, src, h, st="todo": {"id": i, "source": src, "due": now + h * 3600, "status": st}
+    tasks = [t("late", "canvas", -5, "missing"), t("s_today", "schoology", 2), t("c_today", "canvas", 6),
+             t("c_tomorrow", "canvas", 24), t("c_done", "canvas", 3, "done"), t("s_hidden", "schoology", 1)]
+    s = {"scores": {}, "hidden": ["s_hidden"], "focus_pts": 2}
+    assert [x["id"] for x in todo(tasks, s, now)] == ["c_today", "s_today", "c_tomorrow", "late"]
+    gap = [t("late_old", "canvas", -50, "missing"), t("late_new", "canvas", -5, "missing"), t("far", "canvas", 72)]
+    assert [x["id"] for x in todo(gap, s, now)] == ["late_new", "late_old", "far"]  # nothing due in 2 days
+    gap[2]["due"] = now + 30 * 3600
+    assert [x["id"] for x in todo(gap, s, now)] == ["far", "late_new", "late_old"]
+
+    s["scores"] = {"a": {"pts": 10, "due": 3, "on_time": True}, "b": {"pts": 3, "due": 1, "on_time": False},
+                   "c": {"pts": 10, "due": 2, "on_time": True}}
+    assert (total(s), streak(s)) == (25, 2)
+    assert (left(-90000), left(7200), left(59)) == ("1d late", "2h", "0m")
+    assert [course_name(n) for n in ("202660_1_ON_ENGL101_60413", "MATH 120A Fall", "Biology")] == ["ENGL101", "MATH 120A", "Biology"]
+    print("ok")
+
+
+def main():
+    cmds = {"daemon": daemon, "menu": run_menu, "selftest": selftest}
+    if sys.argv[1:] == ["sync"]:
+        errors = sync()
+        tick()
+        print(open(BAR).read().strip(), *errors, sep="\n")
+    elif len(sys.argv) == 2 and sys.argv[1] in cmds:
+        cmds[sys.argv[1]]()
+    else:
+        print(__doc__, file=sys.stderr)
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

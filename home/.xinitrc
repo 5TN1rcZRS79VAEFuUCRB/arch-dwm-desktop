@@ -36,5 +36,8 @@ dbus-update-activation-environment --systemd DISPLAY XAUTHORITY
 # Mod+Shift+T lists them in dmenu. Started first so apps find it when they launch.
 ~/.local/bin/dwm-tray daemon &
 
+# Canvas/Schoology assignments: bar text, reminders, daily summary. Menu is Mod+a.
+~/.local/bin/dwm-school daemon &
+
 ~/.local/bin/dwm-status.sh &
 exec dwm

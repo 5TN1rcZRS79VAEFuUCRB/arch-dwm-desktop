@@ -14,8 +14,9 @@ xorg-xrdb
 xorg-xset
 xorg-xsetroot
 
-# --- fonts (dwm, st and dmenu all resolve to DejaVu Sans Mono) ---
+# --- fonts (dwm, st and dmenu all resolve to DejaVu Sans Mono; the bar icons come from the Nerd Font symbols) ---
 ttf-dejavu
+ttf-nerd-fonts-symbols-mono
 
 # --- audio: the volume readout and device pickers on the bar ---
 pipewire
@@ -41,6 +42,13 @@ nss-mdns
 # --- screenshots (dwm-shot: Print / Shift+Print)
 maim
 xclip
+
+# --- notifications: dwm-school reminders (notify-send + dunst) ---
+dunst
+libnotify
+
+# --- dwm-school: opens assignments in the browser ---
+xdg-utils
 
 # --- bar stats + helper scripts ---
 lm_sensors

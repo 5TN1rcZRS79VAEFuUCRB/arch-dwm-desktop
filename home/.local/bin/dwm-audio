@@ -4,7 +4,7 @@
 # bar and keybindings (PipeWire via wpctl/pactl).
 #
 #   dwm-audio vol up|down|mute|micmute|micup|micdown
-#   dwm-audio status              one-line summary for the bar, e.g. "VOL 40% MIC MUTE"
+#   dwm-audio status              one-line summary for the bar: volume and mic icons with levels (Nerd Font)
 #   dwm-audio menu out|in         dmenu picker; sets the default device and
 #                                 moves any playing/recording streams onto it
 
@@ -87,7 +87,7 @@ for p in nodes:
 level() {
 	local v
 	v="$(wpctl get-volume "$2" 2>/dev/null)"
-	if [[ "$v" == *MUTED* ]]; then echo "$1 MUTE"; else awk -v l="$1" '{printf "%s %d%%\n", l, $2 * 100 + 0.5}' <<< "$v"; fi
+	if [[ "$v" == *MUTED* ]]; then echo "${3:-$1} MUTE"; else awk -v l="$1" '{printf "%s %d%%\n", l, $2 * 100 + 0.5}' <<< "$v"; fi
 }
 
 case "$1" in
@@ -106,7 +106,7 @@ vol)
 	*)       echo "usage: dwm-audio vol up|down|mute|micmute|micup|micdown" >&2; exit 2 ;;
 	esac
 	refresh_bar ;;
-status) echo "$(level VOL @DEFAULT_AUDIO_SINK@) $(level MIC @DEFAULT_AUDIO_SOURCE@)" ;;
+status) echo "$(level  @DEFAULT_AUDIO_SINK@ ) $(level  @DEFAULT_AUDIO_SOURCE@ )" ;;
 menu)
 	kind_setup "$2"
 	if [ "$2" = out ]; then other=in; link="-> Input devices"; else other=out; link="-> Output devices"; fi
