@@ -377,11 +377,13 @@ def daemon():
 
 # ---- menu ----
 
-def focus_end():
+def focus_end(kind=None):
+    """End time of the running timer (only if its icon is `kind`, when given), else 0."""
     try:
         with open(FOCUS) as f:
-            return int(f.read().split()[0])
-    except (OSError, ValueError, IndexError):
+            end, icon = f.read().split()[:2]
+        return int(end) if kind in (None, icon) else 0
+    except (OSError, ValueError):
         return 0
 
 
@@ -404,6 +406,8 @@ def timer(secs, icon, text):
 def focus(t):
     """Open the assignment and run 10-minute sessions, asking after each: more, a break, or done."""
     open_url(t)
+    with state() as s:
+        s["focus_task"] = t["id"]
     notify(f"Focus 10 min: {t['title']}", "Just start. It doesn't have to be good yet.")
     # "10 more minutes" is listed first: an Enter typed into the essay as dmenu pops up keeps you going.
     after_focus = [("10 more minutes", "more"), ("5-minute break", "rest"), ("Done", "done")]
@@ -422,6 +426,21 @@ def focus(t):
             return
 
 
+def finish():
+    """Done before the timer ran out: the session counts, and the task is checked off."""
+    os.remove(FOCUS)  # the timer sees it gone and stops without asking what's next
+    tasks = load("tasks.json", {"tasks": []})["tasks"]
+    with state() as s:
+        s["focus_pts"] += 2
+        t = next((x for x in tasks if x["id"] == s.get("focus_task")), None)
+        notify("Finished early: +2 pts", f"{total(s)} pts")
+    if t and t["source"] == "schoology":
+        mark_done(t)
+    else:
+        sync()  # Canvas: picks up the submission (and its +10) now instead of in 5 minutes
+    tick()
+
+
 def dmenu(rows, prompt):
     p = subprocess.run(DMENU + ["-p", prompt], input="\n".join(l for l, _ in rows) + "\n",
                        capture_output=True, text=True)
@@ -436,6 +455,8 @@ def run_menu():
         items = todo(tasks, s, now)
         prompt = f"{total(s)}pt streak {streak(s)}"
     rows = []
+    if focus_end(TIMER) > now:
+        rows.append(("Finished it", ("finish", None)))
     if focus_end() > now:
         rows.append(("Stop timer", ("stop", None)))
     elif items:
@@ -450,6 +471,8 @@ def run_menu():
         act, t = dmenu(sub, short(t["title"], 40)) or (None, None)
     if act == "focus":
         focus(t)
+    elif act == "finish":
+        finish()
     elif act == "stop":
         os.remove(FOCUS)
     elif act == "open":
