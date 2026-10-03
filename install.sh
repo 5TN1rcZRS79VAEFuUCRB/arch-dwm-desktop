@@ -254,6 +254,24 @@ else
 	warn "syncthing is not installed; skipping"
 fi
 
+# ---------------------------------------------------------------- Claude Code add-ons
+# ponytail + caveman plugins, and the caveman proxy routed in front of Claude Code
+# (caveman's SessionStart hook starts the proxy each session). Undo: caveman disable claude
+say "Claude Code: ponytail and caveman plugins, caveman proxy"
+if command -v claude >/dev/null; then
+	{
+		claude plugin marketplace add DietrichGebert/ponytail \
+			&& claude plugin install ponytail@ponytail \
+			&& claude plugin marketplace add JuliusBrussee/caveman \
+			&& claude plugin install caveman@caveman \
+			&& npm install -g --prefix "$HOME/.local" @caveman-ai/cli \
+			&& "$HOME/.local/bin/caveman" setup --install \
+			&& "$HOME/.local/bin/caveman" enable claude
+	} || warn "Claude add-ons failed (often a download hiccup); rerun: ./install.sh --no-packages --no-build"
+else
+	warn "Claude Code is not installed; skipping. Install it (curl -fsSL https://claude.ai/install.sh | bash), then rerun"
+fi
+
 # ---------------------------------------------------------------- GTK dark preference (dconf)
 say "GTK/desktop dark preference"
 dconf_write() {

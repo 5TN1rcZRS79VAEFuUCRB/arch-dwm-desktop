@@ -65,3 +65,7 @@ qt6ct
 firefox
 keepassxc
 syncthing        # keeps the KeePassXC database in sync between machines
+
+# --- Claude Code add-ons: the caveman proxy CLI is an npm package ---
+nodejs
+npm

@@ -49,6 +49,7 @@ of X and run `startx` again.
 | KeePassXC dark theme | `~/.config/keepassxc/keepassxc.ini` (only that one setting) |
 | Syncthing (keeps the KeePassXC database in sync), started now and at every login | `systemctl --user enable syncthing`. Pair devices and share the folder yourself at http://127.0.0.1:8384; keys are never in this repo |
 | Desktop-wide "prefer dark" | dconf (`org.gnome.desktop.interface`) |
+| Claude Code: ponytail + caveman plugins, caveman proxy started with every session (only if `claude` is installed; undo with `caveman disable claude`) | `~/.claude/settings.json`, `~/.claude.json`, `~/.caveman/` |
 
 Packages are listed in `packages.txt`.
 
