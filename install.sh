@@ -171,9 +171,13 @@ if command -v firefox >/dev/null; then
 		warn "could not find/create a Firefox profile. Start Firefox once, close it, then run:"
 		warn "  ./install.sh --no-packages --no-build"
 	fi
-	# Extensions (uBlock Origin) come from a system-wide Firefox policy, so they are installed
-	# automatically the next time Firefox starts. Needs root because it lives in /etc.
+	# Extensions (uBlock Origin, Violentmonkey) come from a system-wide Firefox policy, so they are
+	# installed automatically the next time Firefox starts. Needs root because it lives in /etc.
+	# The Always-visible userscript ships in this repo, but Violentmonkey keeps its scripts in its
+	# own storage, which a policy cannot seed, so it is imported by hand once (see the line printed).
 	sudo_place firefox/policies.json /etc/firefox/policies/policies.json
+	echo "Violentmonkey will auto-install; import the userscript once by opening this in Firefox:"
+	echo "  file://$PWD/firefox/always-visible.user.js   (Violentmonkey shows an install page)"
 else
 	warn "firefox is not installed; skipping its settings"
 fi
