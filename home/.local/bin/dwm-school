@@ -7,11 +7,12 @@ dwm-school: Canvas + Schoology assignments in the dwm bar, with points, a streak
   dwm-school menu      dmenu: next task, 10-minute focus timer, open / mark done (Mod+a in config.h)
   dwm-school selftest  check the feed parser, ordering and scoring
 
-Setup:
-  ~/.canvas_token            Canvas access token (Account > Settings > New Access Token), chmod 600
-  ~/.config/dwm-school.conf  canvas_url=https://yourschool.instructure.com
-                             canvas_token_expires=2027-01-01  (warns daily in the last week)
-                             schoology_ics=webcal://...  (Schoology calendar export link)
+Setup, in ~/.local/share/dwm-school/ (share that folder with Syncthing to keep machines in step):
+  canvas_token     Canvas access token (Account > Settings > New Access Token), chmod 600
+  dwm-school.conf  canvas_url=https://yourschool.instructure.com
+                   canvas_token_expires=2027-01-01  (warns daily in the last week)
+                   schoology_ics=webcal://...  (Schoology calendar export link)
+  .stignore        tasks.json, lock, daemon.lock, *.tmp  (per machine; state.json is what syncs)
 
 Points: Canvas on time +10, late +3, missing -5 (Canvas reports which, nothing due before the first
 sync counts). Schoology's feed has no submission status, so you mark those done yourself from the
@@ -34,9 +35,9 @@ from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 HOME = os.path.expanduser("~")
-CONF = f"{HOME}/.config/dwm-school.conf"
-TOKEN = f"{HOME}/.canvas_token"
 DATA = os.path.join(os.environ.get("XDG_DATA_HOME", f"{HOME}/.local/share"), "dwm-school")
+CONF = f"{DATA}/dwm-school.conf"
+TOKEN = f"{DATA}/canvas_token"
 RUN = os.environ.get("XDG_RUNTIME_DIR", f"{HOME}/.cache")
 BAR = f"{RUN}/dwm-school-bar"      # one line, read by dwm-status.sh
 FOCUS = f"{RUN}/dwm-school-focus"  # "<end epoch> <icon> <text>": the running focus/break timer, read by dwm-status.sh
@@ -77,15 +78,18 @@ def write(path, text):
 
 @contextmanager
 def state():
-    """Load, modify and save state.json under a lock (the daemon, menu and focus timer all write it)."""
+    """Load, modify and save state.json under a lock (the daemon, menu and focus timer all write it).
+    Saved only when something changed, so a synced copy on another machine isn't overwritten every minute."""
     os.makedirs(DATA, exist_ok=True)
     with open(f"{DATA}/lock", "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         s = load("state.json", {})
         for k, v in {"scores": {}, "hidden": [], "reminded": [], "focus_pts": 0}.items():
             s.setdefault(k, v)
+        before = json.dumps(s)
         yield s
-        write(f"{DATA}/state.json", json.dumps(s))
+        if json.dumps(s) != before:
+            write(f"{DATA}/state.json", json.dumps(s))
 
 
 def config():
@@ -341,7 +345,7 @@ def token_warning(s, now):
     if days <= 7:
         s["token_warned"] = today
         notify(f"Canvas token expires in {max(0, math.ceil(days))} days",
-               "Account > Settings > New Access Token, save it to ~/.canvas_token, update dwm-school.conf", urgent=True)
+               f"Account > Settings > New Access Token, save it to {TOKEN}, update dwm-school.conf", urgent=True)
 
 
 def tick():

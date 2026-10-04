@@ -145,10 +145,10 @@ focus session is +2. Upcoming work comes first, Canvas before Schoology on the s
 due within 2 days, late work moves to the top. When nothing is late and nothing is due within 3 days,
 the bar shows a break (`free until Sun 10/11`) instead; it ends when the next 3-day reminder fires.
 
-It needs two things that are never in this repo:
+It needs two things that are never in this repo, both in `~/.local/share/dwm-school/`:
 
-* `~/.canvas_token`: Canvas → Account → Settings → **New Access Token** (chmod 600)
-* `~/.config/dwm-school.conf`:
+* `canvas_token`: Canvas → Account → Settings → **New Access Token** (chmod 600)
+* `dwm-school.conf`:
 
   ```
   canvas_url=https://yourschool.instructure.com
@@ -161,6 +161,11 @@ It needs two things that are never in this repo:
   last week.
 
 Then run `dwm-school sync` to check it. `dwm-school selftest` checks the parser and scoring.
+
+To keep points, marked-done work, the token and the config the same on several machines, share
+`~/.local/share/dwm-school` with Syncthing (folder ID `dwm-school`) and put a `.stignore` in it with
+`tasks.json`, `lock`, `daemon.lock` and `*.tmp`, so each machine fetches its own assignment list. Before
+sharing to a machine that already ran `dwm-school`, delete its `state.json` so the empty one doesn't win.
 
 ## Screenshots
 
