@@ -16,8 +16,8 @@ Setup, in ~/.local/share/dwm-school/ (share that folder with Syncthing to keep m
 
 Points: Canvas on time +10, late +3, missing -5 (Canvas reports which, nothing due before the first
 sync counts). Schoology's feed has no submission status, so you mark those done yourself from the
-menu: on time +10, late +3, no penalty. A finished focus session is +2. The streak is on-time work
-in a row. Reminders go out 3 days, 1 day and 3 hours before a due date, plus a summary each morning.
+menu: on time +10, late +3, no penalty. A finished focus session is +2. The streak is days in a row with
+something turned in on time or a finished focus session. Reminders go out 3 days, 1 day and 3 hours before a due date, plus a summary each morning.
 """
 import fcntl
 import math
@@ -28,7 +28,7 @@ import subprocess
 import sys
 import time
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from urllib.parse import urlencode
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -40,6 +40,7 @@ CONF = f"{DATA}/dwm-school.conf"
 TOKEN = f"{DATA}/canvas_token"
 RUN = os.environ.get("XDG_RUNTIME_DIR", f"{HOME}/.cache")
 BAR = f"{RUN}/dwm-school-bar"      # one line, read by dwm-status.sh
+STICKY = f"{RUN}/dwm-school-sticky"  # ids of notifications that stay until clicked; Mod+a closes them
 FOCUS = f"{RUN}/dwm-school-focus"  # "<end epoch> <icon> <text>": the running focus/break timer, read by dwm-status.sh
 DMENU = ["dmenu", "-i", "-l", "15"]
 
@@ -222,17 +223,28 @@ def total(s):
     return s["focus_pts"] + sum(v["pts"] for v in s["scores"].values())
 
 
-def streak(s):
+def active(s):
+    """Today counts toward the streak: something went in on time, or a focus session finished."""
+    today = date.today().isoformat()
+    if today not in s.setdefault("days", []):
+        s["days"].append(today)
+
+
+def streak(s, today=None):
+    """Days in a row that counted. Today only breaks it once it's over, so it can still be saved."""
+    days, d = set(s.get("days", [])), today or date.today()
+    if d.isoformat() not in days:
+        d -= timedelta(days=1)
     n = 0
-    for v in sorted(s["scores"].values(), key=lambda v: -v["due"]):
-        if not v["on_time"]:
-            break
-        n += 1
+    while d.isoformat() in days:
+        n, d = n + 1, d - timedelta(days=1)
     return n
 
 
 def cheer(s, t, pts):
-    notify(f"+{pts} pts: {t['title']}", f"{total(s)} pts, streak {streak(s)}")
+    if pts >= PTS["done"]:  # on time
+        active(s)
+    notify(f"+{pts} pts: {t['title']}", f"{total(s)} pts, {streak(s)}-day streak")
 
 
 def score_canvas(s, t):
@@ -309,11 +321,30 @@ def bar_text(tasks, errors, s, now):
 
 
 def notify(title, body="", urgent=False):
+    """Urgent ones stay until clicked (dunstrc) or until Mod+a opens the menu (close_sticky)."""
     try:
-        subprocess.run(["notify-send", "-a", "dwm-school", "-u", "critical" if urgent else "normal", title, body],
-                       capture_output=True, timeout=10)
+        p = subprocess.run(["notify-send", "-p", "-a", "dwm-school", "-u", "critical" if urgent else "normal",
+                            title, body], capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.TimeoutExpired):
-        pass
+        return
+    if urgent and p.stdout.strip().isdigit():
+        with open(STICKY, "a") as f:
+            f.write(p.stdout.strip() + "\n")
+
+
+def close_sticky():
+    """Opening the menu means they've been seen."""
+    try:
+        with open(STICKY) as f:
+            ids = f.read().split()
+        os.remove(STICKY)
+    except OSError:
+        return
+    for i in ids:
+        subprocess.run(["gdbus", "call", "--session", "--dest", "org.freedesktop.Notifications",
+                        "--object-path", "/org/freedesktop/Notifications",
+                        "--method", "org.freedesktop.Notifications.CloseNotification", i],
+                       capture_output=True, timeout=10)
 
 
 def remind(s, items, now):
@@ -429,6 +460,7 @@ def focus(t, reopen=True):
     with state() as s:
         s["focus_pts"] += 2
         s["focus_next"] = time.time()
+        active(s)
         pts = total(s)
     tick()
     notify(f"Session done: +2 pts ({pts})", "Mod+a: 10 more minutes or a 5-minute break", urgent=True)
@@ -456,6 +488,7 @@ def finish():
     tasks = load("tasks.json", {"tasks": []})["tasks"]
     with state() as s:
         s["focus_pts"] += 2
+        active(s)
         t = next((x for x in tasks if x["id"] == s.get("focus_task")), None)
         notify("Finished early: +2 pts", f"{total(s)} pts")
     if t and t["source"] == "schoology":
@@ -473,11 +506,12 @@ def dmenu(rows, prompt):
 
 
 def run_menu():
+    close_sticky()
     tasks = load("tasks.json", {"tasks": []})["tasks"]
     now = time.time()
     with state() as s:
         items = todo(tasks, s, now)
-        prompt = f"{total(s)}pt streak {streak(s)}"
+        prompt = f"{total(s)} pts, {streak(s)}-day streak"
         since = s.get("since", now)
         again = next_session(tasks, s, now)
     rows = []
@@ -562,7 +596,13 @@ def selftest():
 
     s["scores"] = {"a": {"pts": 10, "due": 3, "on_time": True}, "b": {"pts": 3, "due": 1, "on_time": False},
                    "c": {"pts": 10, "due": 2, "on_time": True}}
-    assert (total(s), streak(s)) == (25, 2)
+    assert total(s) == 25
+    d = date(2026, 10, 7)
+    s["days"] = ["2026-10-03", "2026-10-05", "2026-10-06"]
+    assert streak(s, d) == 2  # today not done yet: yesterday's run still stands
+    s["days"].append("2026-10-07")
+    assert streak(s, d) == 3  # the gap on 10/04 ends it
+    assert streak(s, date(2026, 10, 9)) == 0  # a whole day missed
     assert (left(-90000), left(7200), left(59)) == ("1d late", "2h", "0m")
     assert break_until([t("x", "canvas", 100)], now) == now + 28 * 3600  # free until 3 days before it's due
     assert break_until([t("x", "canvas", 71)], now) is None  # due within 3 days: no break
