@@ -55,6 +55,7 @@ PTS = {"done": 10, "late": 3, "missing": -5}
 TIMER = "󰔛"
 CAP, WARN, COFFEE, STAR, FIRE = "", "", "󰅶", "", "󰈸"
 LATE_FIRST = 2 * 86400  # nothing due within this long: late work moves to the top
+SCHOOLOGY_LATE = 7 * 86400  # late Schoology work stays listed this long (its feed can't say it was turned in)
 BREAK = 3 * 86400  # nothing late and nothing due within this long: a break (ends when the 3-day reminder fires)
 
 
@@ -260,7 +261,7 @@ def todo(tasks, s, now):
     most recent first (likeliest to still be accepted). With nothing due soon, overdue goes first."""
     keep = [t for t in tasks if t["id"] not in s["hidden"] and (
         t["status"] in ("todo", "missing") if t["source"] == "canvas"
-        else t["id"] not in s["scores"] and t["due"] > now - 86400)]
+        else t["id"] not in s["scores"] and t["due"] > now - SCHOOLOGY_LATE)]
     day = lambda t: time.strftime("%Y%m%d", time.localtime(t["due"]))
     items = sorted(keep, key=lambda t: (False, day(t), t["source"] != "canvas", t["due"]) if t["due"] >= now
                    else (True, -t["due"]))
@@ -529,6 +530,8 @@ def selftest():
              t("c_tomorrow", "canvas", 24), t("c_done", "canvas", 3, "done"), t("s_hidden", "schoology", 1)]
     s = {"scores": {}, "hidden": ["s_hidden"], "focus_pts": 2}
     assert [x["id"] for x in todo(tasks, s, now)] == ["c_today", "s_today", "c_tomorrow", "late"]
+    old = [t("s_6d", "schoology", -6 * 24), t("s_8d", "schoology", -8 * 24)]
+    assert [x["id"] for x in todo(old, s, now)] == ["s_6d"]  # late Schoology work stays a week
     gap = [t("late_old", "canvas", -50, "missing"), t("late_new", "canvas", -5, "missing"), t("far", "canvas", 72)]
     assert [x["id"] for x in todo(gap, s, now)] == ["late_new", "late_old", "far"]  # nothing due in 2 days
     gap[2]["due"] = now + 30 * 3600
