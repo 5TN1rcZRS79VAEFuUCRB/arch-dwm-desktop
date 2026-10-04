@@ -142,7 +142,8 @@ or mark Schoology work done.
 
 Points: Canvas work on time +10, late +3, missing -5 (Canvas reports which). Schoology's feed has no
 submission status, so you mark that work done yourself (on time +10, late +3, no penalty); late Schoology
-work stays listed for a week unless you mark it done or hide it. A finished
+work stays listed for a week unless you mark it done (on time or late: you say which) or hide it; work
+due before the first sync just gets **Done**, with no points either way. A finished
 focus session is +2. Upcoming work comes first, Canvas before Schoology on the same day; when nothing is
 due within 2 days, late work moves to the top. When nothing is late and nothing is due within 3 days,
 the bar shows a break (`free until Sun 10/11`) instead; it ends when the next 3-day reminder fires.

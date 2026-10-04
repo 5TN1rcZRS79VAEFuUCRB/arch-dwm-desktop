@@ -247,9 +247,15 @@ def score_canvas(s, t):
         cheer(s, t, PTS[t["status"]])
 
 
-def mark_done(t):
-    on_time = time.time() <= t["due"]
+def mark_done(t, on_time=None):
+    """Schoology work checked off by hand. on_time defaults to whether it's past due right now.
+    Work due before the first sync is just cleared: no points either way (the same fresh start as Canvas)."""
+    if on_time is None:
+        on_time = time.time() <= t["due"]
     with state() as s:
+        if t["due"] < s.get("since", 0):
+            s["hidden"].append(t["id"])
+            return
         s["scores"][t["id"]] = {"pts": 10 if on_time else 3, "due": t["due"], "on_time": on_time}
         cheer(s, t, s["scores"][t["id"]]["pts"])
 
@@ -472,6 +478,7 @@ def run_menu():
     with state() as s:
         items = todo(tasks, s, now)
         prompt = f"{total(s)}pt streak {streak(s)}"
+        since = s.get("since", now)
         again = next_session(tasks, s, now)
     rows = []
     if again and not focus_end():
@@ -487,8 +494,14 @@ def run_menu():
     act, t = dmenu(rows, prompt) or (None, None)
     if act == "task":
         sub = [("Start 10-min focus", ("focus", t)), ("Open in browser", ("open", t))]
+        if t["source"] == "schoology" and t["due"] < since:  # from before the tracker: clear it, no points
+            sub += [("Done", ("done", t))]
+        elif t["source"] == "schoology" and t["due"] < now:  # past due: it may have gone in on time anyway
+            sub += [("Turned it in on time", ("done_on_time", t)), ("Turned it in late", ("done", t))]
+        elif t["source"] == "schoology":
+            sub += [("Mark done", ("done", t))]
         if t["source"] == "schoology":
-            sub += [("Mark done", ("done", t)), ("Hide (not an assignment)", ("hide", t))]
+            sub += [("Hide (not an assignment)", ("hide", t))]
         act, t = dmenu(sub, short(t["title"], 40)) or (None, None)
     if act == "focus":
         focus(t)
@@ -506,10 +519,12 @@ def run_menu():
         sync()
     elif act == "done":
         mark_done(t)
+    elif act == "done_on_time":
+        mark_done(t, on_time=True)
     elif act == "hide":
         with state() as s:
             s["hidden"].append(t["id"])
-    if act in ("sync", "done", "hide"):
+    if act in ("sync", "done", "done_on_time", "hide"):
         tick()
 
 
@@ -532,6 +547,14 @@ def selftest():
     assert [x["id"] for x in todo(tasks, s, now)] == ["c_today", "s_today", "c_tomorrow", "late"]
     old = [t("s_6d", "schoology", -6 * 24), t("s_8d", "schoology", -8 * 24)]
     assert [x["id"] for x in todo(old, s, now)] == ["s_6d"]  # late Schoology work stays a week
+    global state
+    real_state, mem = state, dict(s, since=now, scores={}, hidden=[])
+    state = contextmanager(lambda: (yield mem))
+    try:
+        mark_done(old[0], on_time=True)  # due before the first sync: cleared, no points
+        assert mem["scores"] == {} and mem["hidden"] == ["s_6d"]
+    finally:
+        state = real_state
     gap = [t("late_old", "canvas", -50, "missing"), t("late_new", "canvas", -5, "missing"), t("far", "canvas", 72)]
     assert [x["id"] for x in todo(gap, s, now)] == ["late_new", "late_old", "far"]  # nothing due in 2 days
     gap[2]["due"] = now + 30 * 3600
