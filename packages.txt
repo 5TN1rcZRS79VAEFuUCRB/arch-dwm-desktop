@@ -35,6 +35,9 @@ libxss
 # --- network picker (dwm-net, Mod+N); the laptop's battery and power profile need no package here
 networkmanager
 
+# --- Tailscale: ssh arch-server from anywhere, without a browser login ---
+tailscale
+
 # --- local hostnames: reach other machines as name.local (ssh gavin@arch-server.local)
 avahi
 nss-mdns

@@ -190,6 +190,18 @@ fi
 # ---------------------------------------------------------------- Syncthing (KeePassXC sync)
 # Only the service is set up here. Device keys and the folder/device pairing live in
 # ~/.local/state/syncthing and are never in this repo; pair devices at http://127.0.0.1:8384.
+say "Tailscale and ssh arch-server"
+# ~/.ssh/config stays this machine's own file; the repo's host entries come in through an Include.
+SSH_INCLUDE='Include ~/.ssh/config.d/*.conf'
+touch "$HOME/.ssh/config" && chmod 600 "$HOME/.ssh/config"
+if ! grep -qxF "$SSH_INCLUDE" "$HOME/.ssh/config"; then
+	if [ -s "$HOME/.ssh/config" ]; then sed -i "1i $SSH_INCLUDE" "$HOME/.ssh/config"; else echo "$SSH_INCLUDE" > "$HOME/.ssh/config"; fi
+fi
+if command -v tailscale >/dev/null; then
+	sudo systemctl enable --now tailscaled || warn "could not start tailscaled; run: sudo systemctl enable --now tailscaled"
+	tailscale status >/dev/null 2>&1 || warn "Tailscale is not logged in yet; run once: sudo tailscale up"
+fi
+
 say "Syncthing: start now and at every login"
 if command -v syncthing >/dev/null; then
 	systemctl --user enable --now syncthing \
