@@ -109,7 +109,7 @@ while true; do
 	# CPU temp and the GPU block are left out when the hardware has no sensor for them.
 	stats="  ${cpu:-0}%"
 	[ -n "$ctemp" ] && stats+=" ${ctemp}°"
-	[ -n "$gpu_util" ] && stats+=" | 󰪭 ${gpu_util}% ${gpu_temp}°"
+	[ -n "$gpu_util" ] && stats+=" | 󰢮 ${gpu_util}% ${gpu_temp}°"
 
 	hw=""; read -r hw < "$SCHOOL_BAR" 2>/dev/null
 	# A running focus or break timer replaces the next-assignment text: "<icon> 7:32 <task>".
