@@ -18,6 +18,7 @@
     alignment = left
     ellipsize = end
     show_age_threshold = -1
+    show_indicators = no
     mouse_left_click = close_current
     mouse_right_click = close_all
 
