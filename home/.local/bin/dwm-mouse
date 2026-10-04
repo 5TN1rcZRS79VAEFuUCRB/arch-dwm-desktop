@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+#
+# dwm-mouse: mouse sensitivity and acceleration profile (libinput, via xinput).
+#
+#   dwm-mouse                     dmenu: pick a speed (or type one, -1 to 1) or the accel profile
+#   dwm-mouse speed -0.5          set the speed, -1 (slowest) to 1 (fastest), 0 is neutral
+#   dwm-mouse profile flat        flat (no acceleration, best for games) or adaptive
+#   dwm-mouse apply               re-apply the saved settings (run from ~/.xinitrc)
+#
+# Settings are saved in ~/.config/dwm-mouse and applied to every mouse; touchpads are left alone.
+# Until something is saved, nothing is changed, so any xorg.conf.d settings stay in effect.
+# Bound to Mod+Shift+M in dwm's config.h.
+
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/dwm-mouse"
+DMENU=(dmenu -i -l 24)
+
+SPEED="" PROFILE=""
+[ -f "$CONF" ] && . "$CONF"
+
+save() { printf 'SPEED=%s\nPROFILE=%s\n' "$SPEED" "$PROFILE" >"$CONF"; }
+
+# Ids of libinput pointer devices that have acceleration settings, minus touchpads (they have tapping).
+mice() {
+	local id props
+	for id in $(xinput list --id-only); do
+		props="$(xinput list-props "$id" 2>/dev/null)"
+		grep -q 'libinput Accel Speed (' <<<"$props" || continue
+		grep -q 'libinput Tapping Enabled (' <<<"$props" && continue
+		echo "$id"
+	done
+}
+
+apply() {
+	local id n vec i
+	for id in $(mice); do
+		[ -n "$SPEED" ] && xinput set-prop "$id" "libinput Accel Speed" "$SPEED"
+		if [ -n "$PROFILE" ]; then
+			# One flag per available profile, in libinput's order: adaptive, flat[, custom].
+			n="$(xinput list-props "$id" | sed -n 's/.*libinput Accel Profiles Available ([0-9]*):\s*//p' | tr -cd ',' | wc -c)"
+			vec=()
+			for ((i = 0; i <= n; i++)); do vec+=(0); done
+			[ "$PROFILE" = flat ] && vec[1]=1 || vec[0]=1
+			xinput set-prop "$id" "libinput Accel Profile Enabled" "${vec[@]}"
+		fi
+	done
+}
+
+set_speed() {
+	# Accept -1..1 only; libinput rejects anything else.
+	awk -v s="$1" 'BEGIN { exit !(s ~ /^-?[0-9]*\.?[0-9]+$/ && s >= -1 && s <= 1) }' || {
+		echo "dwm-mouse: speed must be a number from -1 to 1" >&2; return 1; }
+	SPEED="$(awk -v s="$1" 'BEGIN { printf "%.2f", s }')"
+}
+
+set_profile() {
+	case "$1" in
+	flat | adaptive) PROFILE="$1" ;;
+	*) echo "dwm-mouse: profile must be flat or adaptive" >&2; return 1 ;;
+	esac
+}
+
+# Current values as the first mouse actually has them, for the menu.
+current() {
+	local id props
+	id="$(mice | head -n1)"
+	[ -n "$id" ] || return
+	props="$(xinput list-props "$id")"
+	CUR_SPEED="$(sed -n 's/.*libinput Accel Speed ([0-9]*):\s*//p' <<<"$props")"
+	CUR_SPEED="$(awk -v s="$CUR_SPEED" 'BEGIN { printf "%.2f", s }')"
+	case "$(sed -n 's/.*libinput Accel Profile Enabled ([0-9]*):\s*//p' <<<"$props")" in
+	0,\ 1*) CUR_PROFILE=flat ;;
+	1,*) CUR_PROFILE=adaptive ;;
+	*) CUR_PROFILE=other ;;
+	esac
+}
+
+menu() {
+	local choice other s
+	current
+	[ "$CUR_PROFILE" = flat ] && other=adaptive || other=flat
+	choice="$({
+		echo "profile: $other  (now $CUR_PROFILE)"
+		for s in -1.0 -0.9 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0; do
+			[ "$(awk -v s="$s" 'BEGIN { printf "%.2f", s }')" = "$CUR_SPEED" ] && echo "$s  (now)" || echo "$s"
+		done
+	} | "${DMENU[@]}" -p "Mouse speed $CUR_SPEED, or type one:")" || exit 0
+	case "$choice" in
+	profile:*) set_profile "$other" ;;
+	*) set_speed "${choice%% *}" ;;
+	esac || exit 1
+	# Keep the other setting as it is now, so saving one doesn't drop the other.
+	[ -n "$SPEED" ] || SPEED="$CUR_SPEED"
+	[ -n "$PROFILE" ] || [ "$CUR_PROFILE" = other ] || PROFILE="$CUR_PROFILE"
+	save && apply
+}
+
+case "$1" in
+"") menu ;;
+apply) apply ;;
+speed) set_speed "$2" && save && apply ;;
+profile) set_profile "$2" && save && apply ;;
+*) sed -n '3,9p' "$0" >&2; exit 2 ;;
+esac

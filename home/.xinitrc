@@ -16,6 +16,9 @@ xset s noblank
 xset s noexpose                  # ...but the X server itself must not blank (that could cut the signal too)
 "$HOME/.local/bin/dwm-blank" &   # ...and dwm-blank turns the brightness to 0 while it is active
 
+# Mouse speed / acceleration profile saved from Mod+Shift+M (no-op until something is saved).
+"$HOME/.local/bin/dwm-mouse" apply
+
 # Route Qt apps (KeePassXC, etc.) through qt6ct/qt5ct so they pick up the
 # dark palette configured there, instead of Qt's undecorated default style.
 # Both names are listed because Qt5 apps (KeePassXC) only load the qt5ct

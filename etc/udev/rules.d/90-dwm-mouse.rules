@@ -1,0 +1,3 @@
+# A mouse that is plugged in (or replugged) starts dwm-mouse.service in the user's session, which
+# re-applies the speed / acceleration profile saved with Mod+Shift+M. See ~/.local/bin/dwm-mouse.
+ACTION=="add", SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_MOUSE}=="1", TAG+="systemd", ENV{SYSTEMD_USER_WANTS}+="dwm-mouse.service"

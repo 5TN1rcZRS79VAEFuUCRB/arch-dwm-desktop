@@ -39,13 +39,14 @@ of X and run `startx` again.
 | --- | --- |
 | dwm, st, dmenu (built from the sources in `suckless/`) | `~/.local/src/` and `/usr/local/bin/` |
 | `.xinitrc`, `.Xresources` (scaling, cursor), `.bash_profile` (starts X when you log in on tty1) | `~/` |
-| Bar, audio, tray, network (`dwm-net`), battery (`dwm-power`), school assignments (`dwm-school`) and screenshot scripts, the idle screen-off (`dwm-blank`), plus a `keepassxc` launcher (slightly smaller text at high DPI) | `~/.local/bin/` |
+| Bar, audio, tray, network (`dwm-net`), battery (`dwm-power`), mouse speed (`dwm-mouse`), school assignments (`dwm-school`) and screenshot scripts, the idle screen-off (`dwm-blank`), plus a `keepassxc` launcher (slightly smaller text at high DPI) | `~/.local/bin/` |
 | GTK 3/4, Qt 5/6 and xdg-portal dark-mode config, minimal dunst notifications in the bar's colors | `~/.config/` |
 | Firefox settings: dark mode, privacy, no AI or sponsored content (`user.js`) | your Firefox profile directory |
 | Firefox as the default browser, so links from other programs open there | `~/.config/mimeapps.list` |
 | Firefox extensions: uBlock Origin and Violentmonkey, installed by a policy (`policies.json`) | `/etc/firefox/policies/` (needs sudo) |
 | Always-visible userscript (`firefox/always-visible.user.js`) — makes pages act focused/visible in the background. Imported into Violentmonkey by hand once (a policy can't seed its scripts) | Violentmonkey |
 | Xorg: touchpad tap-to-click (one finger left, two right, three middle); on AMD GPUs only, AMD's driver (`xf86-video-amdgpu`) with TearFree | `/etc/X11/xorg.conf.d/` (needs sudo) |
+| Mouse speed / acceleration profile re-applied when a mouse is plugged in (a udev rule starting `dwm-mouse.service`) | `/etc/udev/rules.d/`, `~/.config/systemd/user/` |
 | `.local` hostnames over mDNS (`ssh user@machine.local`): Avahi enabled, `mdns_minimal` added to the `hosts:` line | `/etc/nsswitch.conf` (needs sudo) |
 | Syncthing (keeps the KeePassXC database in sync), started now and at every login | `systemctl --user enable syncthing`. Pair devices and share the folder yourself at http://127.0.0.1:8384; keys are never in this repo |
 | Desktop-wide "prefer dark" | dconf (`org.gnome.desktop.interface`) |
@@ -76,6 +77,7 @@ Packages are listed in `packages.txt`.
 | **Tray apps menu** | `Mod+Shift+T`, or right-click the window title in the bar |
 | **Network picker** | `Mod+N` |
 | **Battery details / power profile** | `Mod+Shift+P` |
+| **Mouse speed / acceleration profile (flat or adaptive)** | `Mod+Shift+M` |
 | **School assignments: next task, 10-minute focus timer, open / mark done** | `Mod+A` |
 | **Screenshot: whole screen / drag an area** | `Print` / `Shift+Print` |
 

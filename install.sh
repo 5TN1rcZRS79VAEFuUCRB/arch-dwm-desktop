@@ -166,6 +166,12 @@ for f in etc/X11/xorg.conf.d/*.conf; do
 	sudo_place "$f" "$dest"
 done
 
+# Replugging a mouse re-applies the dwm-mouse settings (Mod+Shift+M): the rule starts a user service.
+say "udev: re-apply mouse settings on replug"
+sudo_place etc/udev/rules.d/90-dwm-mouse.rules /etc/udev/rules.d/90-dwm-mouse.rules
+sudo udevadm control --reload || warn "could not reload udev rules; they take effect after a reboot"
+systemctl --user daemon-reload 2>/dev/null || true
+
 # ---------------------------------------------------------------- local hostnames (mDNS)
 # Avahi announces this machine as <hostname>.local, and nss-mdns lets ssh, ping, etc.
 # look up other machines' .local names. Adds mdns_minimal to the hosts: line only once.

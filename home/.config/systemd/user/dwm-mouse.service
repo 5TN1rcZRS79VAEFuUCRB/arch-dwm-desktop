@@ -1,0 +1,11 @@
+# Started by /etc/udev/rules.d/90-dwm-mouse.rules when a mouse is plugged in: re-applies the
+# settings saved with Mod+Shift+M. DISPLAY comes from .xinitrc (dbus-update-activation-environment).
+[Unit]
+Description=Re-apply dwm-mouse settings to a newly plugged mouse
+ConditionEnvironment=DISPLAY
+
+[Service]
+Type=oneshot
+# ponytail: fixed wait for X to pick the device up after udev does; poll xinput if 1s ever misses it.
+ExecStartPre=/bin/sleep 1
+ExecStart=%h/.local/bin/dwm-mouse apply
