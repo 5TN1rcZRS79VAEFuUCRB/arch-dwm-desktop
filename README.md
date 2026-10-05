@@ -145,7 +145,7 @@ Points: Canvas work on time +10, late +3, missing -5 (Canvas reports which). Sch
 submission status, so you mark that work done yourself (on time +10, late +3, no penalty); late Schoology
 work stays listed for a week unless you mark it done (on time or late: you say which) or hide it; work
 due before the first sync just gets **Done**, with no points either way. A finished
-focus session is +2. Upcoming work comes first, Canvas before Schoology on the same day; when nothing is
+focus session is +2. Upcoming work comes first, and on the same day Canvas, then Schoology, then Anki; when nothing is
 due within 2 days, late work moves to the top. When nothing is late and nothing is due within 3 days,
 the bar shows a break (`free until Sun 10/11`) instead; it ends when the next 3-day reminder fires.
 
@@ -163,6 +163,10 @@ It needs two things that are never in this repo, both in `~/.local/share/dwm-sch
   The Schoology link is Calendar → Export iCal Feed → Share Calendar (turn on the public calendar feed
   in account settings first). `canvas_token_expires` is optional and gives a daily warning in the token's
   last week.
+
+With Anki installed (`sudo pacman -S anki`) and a profile in `~/.local/share/Anki2`, today's due cards
+show up as `Anki: N cards`, due at 11:59 PM; opening it starts Anki, and getting to zero is +10 and a
+streak day. The cards are counted on a copy of the collection, so Anki can stay open.
 
 Then run `dwm-school sync` to check it. `dwm-school selftest` checks the parser and scoring.
 

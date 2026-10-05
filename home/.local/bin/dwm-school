@@ -20,12 +20,15 @@ menu: on time +10, late +3, no penalty. A finished focus session is +2. The stre
 something turned in on time or a finished focus session. Reminders go out 3 days, 1 day and 3 hours before a due date, plus a summary each morning.
 """
 import fcntl
+import glob
 import math
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
@@ -55,6 +58,7 @@ PTS = {"done": 10, "late": 3, "missing": -5}
 # Bar icons (Symbols Nerd Font): graduation cap, warning, coffee, star, flame
 TIMER = "󰔛"
 CAP, WARN, COFFEE, STAR, FIRE = "", "", "󰅶", "", "󰈸"
+PRIORITY = {"canvas": 1, "schoology": 2, "anki": 3}  # breaks ties between things due the same day
 LATE_FIRST = 2 * 86400  # nothing due within this long: late work moves to the top
 SCHOOLOGY_LATE = 7 * 86400  # late Schoology work stays listed this long (its feed can't say it was turned in)
 BREAK = 3 * 86400  # nothing late and nothing due within this long: a break (ends when the 3-day reminder fires)
@@ -174,7 +178,7 @@ def parse_ics(text):
             continue
         title = re.sub(r"\\(.)", lambda m: " " if m.group(1) in "nN" else m.group(1), f.get("SUMMARY", ([], "?"))[1])
         events.append({"id": "s:" + f.get("UID", ([], title + f["DTSTART"][1]))[1], "source": "schoology",
-                       "title": title, "course": "", "due": ics_time(*f["DTSTART"]), "url": f.get("URL", ([], ""))[1]})
+                       "title": title, "course": "Schoology", "due": ics_time(*f["DTSTART"]), "url": f.get("URL", ([], ""))[1]})
     return events
 
 
@@ -190,6 +194,27 @@ def schoology_tasks(feed):
     # Calendar events (fundraisers, meetings) link to /event/; everything else is work to turn in.
     return [dict(e, url=re.sub(r"^http://", "https://", e["url"])) for e in events
             if "/event/" not in e["url"] and now - LOOKBACK < e["due"] < now + AHEAD]
+
+
+def anki_due():
+    """Cards due today in the local Anki collection, or None without Anki. Counted on a copy, so the
+    real collection is never touched, even while Anki has it open."""
+    try:
+        from anki.collection import Collection
+    except ImportError:
+        return None
+    cols = sorted(glob.glob(os.path.expanduser("~/.local/share/Anki2/*/collection.anki2")))
+    if not cols:
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        for suffix in ("", "-wal"):  # the -wal file holds changes Anki hasn't written into the main file yet
+            if os.path.exists(cols[0] + suffix):
+                shutil.copy2(cols[0] + suffix, tmp)
+        col = Collection(os.path.join(tmp, "collection.anki2"))
+        try:
+            return sum(n.new_count + n.learn_count + n.review_count for n in col.sched.deck_due_tree().children)
+        finally:
+            col.close()
 
 
 def sync():
@@ -208,12 +233,29 @@ def sync():
             errors.append("canvas: token expired or wrong, make a new one and update canvas_token_expires" if expired
                           else f"{source}: {e}")
             tasks += [t for t in old if t["source"] == source]
-    write(f"{DATA}/tasks.json", json.dumps({"tasks": tasks, "errors": errors}))
+    try:
+        cards = anki_due()
+    except Exception as e:
+        errors.append(f"anki: {e}")
+        cards = None
+    # Anki is a task for today only: finishing today's cards (due goes from some to none) scores it.
+    today, anki_id = date.today().isoformat(), f"anki:{date.today().isoformat()}"
+    tonight = datetime.now().replace(hour=23, minute=59, second=0, microsecond=0).timestamp()
     with state() as s:
         s.setdefault("since", time.time())
         for t in tasks:
             if t["source"] == "canvas":
                 score_canvas(s, t)
+        if cards:
+            s["anki_day"] = today
+        elif cards == 0 and s.get("anki_day") == today and anki_id not in s["scores"]:
+            s["scores"][anki_id] = {"pts": PTS["done"], "due": tonight, "on_time": True}
+            cheer(s, {"title": "Anki reviews done"}, PTS["done"])
+        anki_done = anki_id in s["scores"]
+    if cards and not anki_done:
+        tasks.append({"id": anki_id, "source": "anki", "title": f"Anki: {cards} cards", "course": "",
+                      "due": tonight, "status": "todo", "url": ""})
+    write(f"{DATA}/tasks.json", json.dumps({"tasks": tasks, "errors": errors}))
     return errors
 
 
@@ -276,13 +318,14 @@ def mark_done(t, on_time=None):
 # ---- what's next ----
 
 def todo(tasks, s, now):
-    """Unfinished work (the bar shows only the first, never a count of late work): upcoming first, by day, Canvas before Schoology on the same day; then overdue,
+    """Unfinished work (the bar shows only the first, never a count of late work): upcoming first, by day, then
+    PRIORITY (Canvas, Schoology, Anki) on the same day; then overdue,
     most recent first (likeliest to still be accepted). With nothing due soon, overdue goes first."""
     keep = [t for t in tasks if t["id"] not in s["hidden"] and (
-        t["status"] in ("todo", "missing") if t["source"] == "canvas"
+        t["status"] in ("todo", "missing") if t["source"] != "schoology"
         else t["id"] not in s["scores"] and t["due"] > now - SCHOOLOGY_LATE)]
     day = lambda t: time.strftime("%Y%m%d", time.localtime(t["due"]))
-    items = sorted(keep, key=lambda t: (False, day(t), t["source"] != "canvas", t["due"]) if t["due"] >= now
+    items = sorted(keep, key=lambda t: (False, day(t), PRIORITY[t["source"]], t["due"]) if t["due"] >= now
                    else (True, -t["due"]))
     n = sum(t["due"] >= now for t in items)
     if not n or items[0]["due"] - now > LATE_FIRST:
@@ -432,7 +475,9 @@ def focus_end(kind=None):
 
 
 def open_url(t):
-    if t["url"].startswith("https://"):
+    if t["source"] == "anki":
+        subprocess.Popen(["anki"], start_new_session=True)  # an already-open Anki just comes to the front
+    elif t["url"].startswith("https://"):
         subprocess.Popen(["xdg-open", t["url"]], start_new_session=True)
 
 
@@ -524,11 +569,13 @@ def run_menu():
         rows.append(("Stop timer", ("stop", None)))
     elif items and not again:
         rows.append((f">> Start 10-min focus: {items[0]['title']}", ("focus", items[0])))
-    rows += [(f"{left(t['due'] - now):>8}  {t['course'] or 'Schoology'}: {t['title']}", ("task", t)) for t in items]
+    rows += [(f"{left(t['due'] - now):>8}  {t['course'] + ': ' if t['course'] else ''}{t['title']}", ("task", t))
+             for t in items]
     rows.append(("Sync now", ("sync", None)))
     act, t = dmenu(rows, prompt) or (None, None)
     if act == "task":
-        sub = [("Start 10-min focus", ("focus", t)), ("Open in browser", ("open", t))]
+        opener = "Open Anki" if t["source"] == "anki" else "Open in browser"
+        sub = [("Start 10-min focus", ("focus", t)), (opener, ("open", t))]
         if t["source"] == "schoology" and t["due"] < now:  # past due: it may have gone in on time anyway
             sub += [("Turned it in on time", ("done_on_time", t)), ("Turned it in late", ("done_late", t))]
             if t["due"] < since:  # from before the tracker: or just clear it, no points
@@ -582,6 +629,8 @@ def selftest():
              t("c_tomorrow", "canvas", 24), t("c_done", "canvas", 3, "done"), t("s_hidden", "schoology", 1)]
     s = {"scores": {}, "hidden": ["s_hidden"], "focus_pts": 2}
     assert [x["id"] for x in todo(tasks, s, now)] == ["c_today", "s_today", "c_tomorrow", "late"]
+    same_day = [t("a", "anki", 11), t("s", "schoology", 1), t("c", "canvas", 6)]
+    assert [x["id"] for x in todo(same_day, s, now)] == ["c", "s", "a"]  # same day: Canvas, Schoology, Anki
     old = [t("s_6d", "schoology", -6 * 24), t("s_8d", "schoology", -8 * 24)]
     assert [x["id"] for x in todo(old, s, now)] == ["s_6d"]  # late Schoology work stays a week
     global state, notify
