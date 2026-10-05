@@ -219,6 +219,6 @@ and what was changed. Those tools keep their own licenses (see the `LICENSE` fil
 
 ## License
 
-The scripts, configuration and installer in this repository are under the MIT license (see `LICENSE`).
+The scripts, configuration and installer in this repository are under the GNU General Public License v3.0 or later (see `LICENSE`).
 dwm, st and dmenu in `suckless/` are the suckless.org projects and keep their own licenses
 (see the `LICENSE` file in each folder).
