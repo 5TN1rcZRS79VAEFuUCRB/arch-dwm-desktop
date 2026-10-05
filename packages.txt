@@ -70,6 +70,8 @@ qt6ct
 firefox
 keepassxc
 syncthing        # keeps the KeePassXC database in sync between machines
+anki             # flashcards; dwm-school shows today's due cards (its add-on is in home/.local/share/Anki2)
+mpv              # plays the audio and video on Anki cards
 
 # --- Claude Code add-ons: the caveman proxy CLI is an npm package ---
 npm

@@ -164,8 +164,8 @@ It needs two things that are never in this repo, both in `~/.local/share/dwm-sch
   in account settings first). `canvas_token_expires` is optional and gives a daily warning in the token's
   last week.
 
-With Anki installed (`sudo pacman -S anki`) and a profile in `~/.local/share/Anki2`, today's due cards
-show up as `Anki: N cards`, due at 11:59 PM; opening it starts Anki, and getting to zero is +10 and a
+`install.sh` also installs Anki (with `mpv` for card audio). Once you sign in with Anki's Sync button,
+today's due cards show up as `Anki: N cards`, due at 11:59 PM; opening it starts Anki, and getting to zero is +10 and a
 streak day. The cards are counted on a copy of the collection, so Anki can stay open. While you study,
 the count drops the moment you answer a card: a small Anki add-on (`~/.local/share/Anki2/addons21/dwm_school`,
 loaded the next time Anki starts) counts inside Anki and wakes dwm-school, and it re-checks every 5 seconds
