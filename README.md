@@ -167,8 +167,9 @@ It needs two things that are never in this repo, both in `~/.local/share/dwm-sch
 With Anki installed (`sudo pacman -S anki`) and a profile in `~/.local/share/Anki2`, today's due cards
 show up as `Anki: N cards`, due at 11:59 PM; opening it starts Anki, and getting to zero is +10 and a
 streak day. The cards are counted on a copy of the collection, so Anki can stay open. While you study,
-the count drops with every answered card: a small Anki add-on (`~/.local/share/Anki2/addons21/dwm_school`,
-loaded the next time Anki starts) pings dwm-school, and it re-checks every 5 seconds as a backup.
+the count drops the moment you answer a card: a small Anki add-on (`~/.local/share/Anki2/addons21/dwm_school`,
+loaded the next time Anki starts) counts inside Anki and wakes dwm-school, and it re-checks every 5 seconds
+as a backup.
 
 Then run `dwm-school sync` to check it. `dwm-school selftest` checks the parser and scoring.
 

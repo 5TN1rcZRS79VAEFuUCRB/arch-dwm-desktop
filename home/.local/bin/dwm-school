@@ -44,6 +44,7 @@ CONF = f"{DATA}/dwm-school.conf"
 TOKEN = f"{DATA}/canvas_token"
 RUN = os.environ.get("XDG_RUNTIME_DIR", f"{HOME}/.cache")
 BAR = f"{RUN}/dwm-school-bar"      # one line, read by dwm-status.sh
+ANKI_COUNT = f"{RUN}/dwm-school-anki"  # "<date> <due>", written by the Anki add-on after each answered card
 PIDFILE = f"{RUN}/dwm-school.pid"  # the daemon; the Anki add-on sends it SIGUSR1 after every answered card
 STICKY = f"{RUN}/dwm-school-sticky"  # ids of notifications that stay until clicked; Mod+a closes them
 FOCUS = f"{RUN}/dwm-school-focus"  # "<end epoch> <icon> <text>": the running focus/break timer, read by dwm-status.sh
@@ -209,6 +210,16 @@ def anki_due():
     cols = sorted(glob.glob(os.path.expanduser("~/.local/share/Anki2/*/collection.anki2")))
     if not cols:
         return None
+    # The add-on's own count is instant; trust it while nothing has touched the collection since
+    # (an undo or an edit in the browser changes the files, and then we count a copy instead).
+    try:
+        with open(ANKI_COUNT) as f:
+            day, n = f.read().split()
+        newest = max(os.stat(c).st_mtime for c in (cols[0], cols[0] + "-wal") if os.path.exists(c))
+        if day == date.today().isoformat() and os.stat(ANKI_COUNT).st_mtime >= newest:
+            return int(n)
+    except (OSError, ValueError):
+        pass
     with tempfile.TemporaryDirectory() as tmp:
         for suffix in ("", "-wal"):  # the -wal file holds changes Anki hasn't written into the main file yet
             if os.path.exists(cols[0] + suffix):
