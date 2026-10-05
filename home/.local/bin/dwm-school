@@ -26,6 +26,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -43,6 +44,7 @@ CONF = f"{DATA}/dwm-school.conf"
 TOKEN = f"{DATA}/canvas_token"
 RUN = os.environ.get("XDG_RUNTIME_DIR", f"{HOME}/.cache")
 BAR = f"{RUN}/dwm-school-bar"      # one line, read by dwm-status.sh
+PIDFILE = f"{RUN}/dwm-school.pid"  # the daemon; the Anki add-on sends it SIGUSR1 after every answered card
 STICKY = f"{RUN}/dwm-school-sticky"  # ids of notifications that stay until clicked; Mod+a closes them
 FOCUS = f"{RUN}/dwm-school-focus"  # "<end epoch> <icon> <text>": the running focus/break timer, read by dwm-status.sh
 DMENU = ["dmenu", "-i", "-l", "15"]
@@ -50,6 +52,7 @@ DMENU = ["dmenu", "-i", "-l", "15"]
 LOOKBACK = 14 * 86400  # overdue work older than this drops off the list
 AHEAD = 60 * 86400
 SYNC_EVERY = 300
+ANKI_EVERY = 5  # while Anki is open, its count refreshes this often
 FOCUS_SECS = 600
 REST_SECS = 300
 NEXT_WINDOW = 1800  # after a session or break, the menu offers 10 more minutes for this long
@@ -233,6 +236,16 @@ def sync():
             errors.append("canvas: token expired or wrong, make a new one and update canvas_token_expires" if expired
                           else f"{source}: {e}")
             tasks += [t for t in old if t["source"] == source]
+    with state() as s:
+        s.setdefault("since", time.time())
+        for t in tasks:
+            if t["source"] == "canvas":
+                score_canvas(s, t)
+    return update_anki(tasks, errors)
+
+
+def update_anki(tasks, errors):
+    """Count today's Anki cards, score finishing them, and save the task list with the Anki task."""
     try:
         cards = anki_due()
     except Exception as e:
@@ -242,21 +255,31 @@ def sync():
     today, anki_id = date.today().isoformat(), f"anki:{date.today().isoformat()}"
     tonight = datetime.now().replace(hour=23, minute=59, second=0, microsecond=0).timestamp()
     with state() as s:
-        s.setdefault("since", time.time())
-        for t in tasks:
-            if t["source"] == "canvas":
-                score_canvas(s, t)
         if cards:
             s["anki_day"] = today
         elif cards == 0 and s.get("anki_day") == today and anki_id not in s["scores"]:
             s["scores"][anki_id] = {"pts": PTS["done"], "due": tonight, "on_time": True}
             cheer(s, {"title": "Anki reviews done"}, PTS["done"])
         anki_done = anki_id in s["scores"]
+        focusing_anki = s.get("focus_task") == anki_id
+    if focusing_anki and focus_end(TIMER) > time.time():  # keep the focus timer's text counting down too
+        write(FOCUS, f"{focus_end()} {TIMER} {'Anki: done' if anki_done else f'Anki: {cards} cards'}\n")
     if cards and not anki_done:
         tasks.append({"id": anki_id, "source": "anki", "title": f"Anki: {cards} cards", "course": "",
                       "due": tonight, "status": "todo", "url": ""})
     write(f"{DATA}/tasks.json", json.dumps({"tasks": tasks, "errors": errors}))
     return errors
+
+
+def anki_refresh():
+    """Re-count just Anki (cheap), keeping the last Canvas/Schoology fetch, so the bar ticks down while you study."""
+    data = load("tasks.json", {"tasks": [], "errors": []})
+    update_anki([t for t in data["tasks"] if t["source"] != "anki"],
+                [e for e in data["errors"] if not e.startswith("anki:")])
+
+
+def anki_running():
+    return subprocess.run(["pgrep", "-f", "^/usr/bin/python /usr/bin/anki"], capture_output=True).returncode == 0
 
 
 # ---- points ----
@@ -448,18 +471,37 @@ def daemon():
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
         sys.exit("dwm-school daemon is already running")
-    last = 0
+    write(PIDFILE, f"{os.getpid()}\n")
+    # SIGUSR1 (from the Anki add-on, after each answered card) is taken by sigtimedwait below, which
+    # wakes the loop at once instead of at its next interval.
+    signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGUSR1})
+    last, anki_was_open, poked = 0, False, False
     while True:
+        anki_open = anki_running()
         steps = [tick]
         if time.time() - last >= SYNC_EVERY:  # failures wait for the next interval too
             last = time.time()
             steps = [sync, tick]
+        elif poked or anki_open or anki_was_open:  # while studying, and once more right after Anki closes
+            steps = [anki_refresh, tick]
+        anki_was_open = anki_open
         for step in steps:
             try:
                 step()
             except Exception as e:
                 print(f"dwm-school {step.__name__}: {e}", file=sys.stderr)
-        time.sleep(60)
+        if poked:
+            redraw_bar()
+        poked = signal.sigtimedwait([signal.SIGUSR1], ANKI_EVERY if anki_open else 60) is not None
+
+
+def redraw_bar():
+    """dwm-status.sh redraws right away on SIGUSR1 instead of on its next one-second tick."""
+    try:
+        with open(f"{RUN}/dwm-status.pid") as f:
+            os.kill(int(f.read()), signal.SIGUSR1)
+    except (OSError, ValueError):
+        pass
 
 
 # ---- menu ----
