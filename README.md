@@ -137,7 +137,7 @@ time left, points and a streak of days in a row with something turned in on time
 session; never a count of late work) and sends reminders 3 days, 1 day and 3 hours before
 each due date, plus a summary every morning. `Mod+A` opens a dmenu list: start a 10-minute focus session
 (it opens the assignment and counts down in the bar with the task's name; when it ends, a notification
-says so and `Mod+A` offers 10 more minutes or a 5-minute break, so nothing grabs the keyboard while you
+says so and `Mod+A` offers 10 more minutes, a 5-minute break, or stopping for now without finishing, so nothing grabs the keyboard while you
 type; **Finished it** ends a session early and checks the task off), open an assignment in the browser,
 or mark Schoology work done.
 

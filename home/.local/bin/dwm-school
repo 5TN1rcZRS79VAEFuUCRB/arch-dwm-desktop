@@ -94,12 +94,48 @@ def state():
     with open(f"{DATA}/lock", "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         s = load("state.json", {})
-        for k, v in {"scores": {}, "hidden": [], "reminded": [], "focus_pts": 0}.items():
-            s.setdefault(k, v)
-        before = json.dumps(s)
+        before = json.dumps(s)  # taken before migrate, so a migrated file gets saved
+        migrate(s)
+        # Two machines changed state.json at once: Syncthing kept one and saved the other as a
+        # conflict copy. Fold the copy back in so nothing done on either machine is lost.
+        merged = []
+        for f in glob.glob(f"{DATA}/state.sync-conflict-*.json"):
+            try:
+                with open(f) as fh:
+                    merge(s, json.load(fh))
+                merged.append(f)
+            except (OSError, ValueError):
+                pass  # still arriving: next time
         yield s
         if json.dumps(s) != before:
             write(f"{DATA}/state.json", json.dumps(s))
+        for f in merged:
+            os.remove(f)
+
+
+def migrate(s):
+    """Fill in defaults. focus_pts (a running total) became focus (one entry per finished session),
+    which two machines can merge; the old total turns into numbered entries, the same on every machine."""
+    for k, v in {"scores": {}, "hidden": [], "reminded": [], "focus": [], "days": []}.items():
+        s.setdefault(k, v)
+    legacy = [f"legacy-{i}" for i in range(1, s.pop("focus_pts", 0) // 2 + 1)]
+    s["focus"] += [x for x in legacy if x not in s["focus"]]
+    return s
+
+
+def merge(s, other):
+    """Fold another machine's copy into s. Everything only grows, so the union keeps both sides' work."""
+    other = migrate(other)
+    for k, v in other["scores"].items():
+        s["scores"].setdefault(k, v)
+    for key in ("hidden", "reminded", "focus", "days"):
+        s[key] += [x for x in other[key] if x not in s[key]]
+    s["days"].sort()
+    for key in ("summary_day", "anki_day", "token_warned"):  # ISO dates: the later one
+        if other.get(key, "") > s.get(key, ""):
+            s[key] = other[key]
+    if "since" in other:
+        s["since"] = min(s.get("since", other["since"]), other["since"])
 
 
 def config():
@@ -295,8 +331,13 @@ def anki_running():
 
 # ---- points ----
 
+def session_id():
+    """One finished focus session: when, and on which machine, so two machines' sessions never collide."""
+    return f"{datetime.now().isoformat(timespec='seconds')} {os.uname().nodename}"
+
+
 def total(s):
-    return s["focus_pts"] + sum(v["pts"] for v in s["scores"].values())
+    return 2 * len(s["focus"]) + sum(v["pts"] for v in s["scores"].values())
 
 
 def active(s):
@@ -557,7 +598,7 @@ def focus(t, reopen=True):
     if not timer(FOCUS_SECS, TIMER, short(t["title"])):
         return
     with state() as s:
-        s["focus_pts"] += 2
+        s["focus"].append(session_id())
         s["focus_next"] = time.time()
         active(s)
         pts = total(s)
@@ -586,7 +627,7 @@ def finish():
     os.remove(FOCUS)  # the timer sees it gone and stops without asking what's next
     tasks = load("tasks.json", {"tasks": []})["tasks"]
     with state() as s:
-        s["focus_pts"] += 2
+        s["focus"].append(session_id())
         active(s)
         t = next((x for x in tasks if x["id"] == s.get("focus_task")), None)
         notify("Finished early: +2 pts", f"{total(s)} pts")
@@ -615,7 +656,8 @@ def run_menu():
         again = next_session(tasks, s, now)
     rows = []
     if again and not focus_end():
-        rows += [(f"10 more minutes: {again['title']}", ("more", again)), ("5-minute break", ("rest", again))]
+        rows += [(f"10 more minutes: {again['title']}", ("more", again)), ("5-minute break", ("rest", again)),
+                 ("Stop for now (not finished)", ("pause", again))]
     if focus_end(TIMER) > now:
         rows.append(("Finished it", ("finish", None)))
     if focus_end() > now:
@@ -644,6 +686,9 @@ def run_menu():
         focus(t, reopen=False)
     elif act == "rest":
         rest(t)
+    elif act == "pause":  # done working on it for now; the task stays open
+        with state() as s:
+            s.pop("focus_next", None)
     elif act == "finish":
         finish()
     elif act == "stop":
@@ -680,7 +725,7 @@ def selftest():
     t = lambda i, src, h, st="todo": {"id": i, "source": src, "due": now + h * 3600, "status": st}
     tasks = [t("late", "canvas", -5, "missing"), t("s_today", "schoology", 2), t("c_today", "canvas", 6),
              t("c_tomorrow", "canvas", 24), t("c_done", "canvas", 3, "done"), t("s_hidden", "schoology", 1)]
-    s = {"scores": {}, "hidden": ["s_hidden"], "focus_pts": 2}
+    s = {"scores": {}, "hidden": ["s_hidden"], "focus": ["f1"]}
     assert [x["id"] for x in todo(tasks, s, now)] == ["c_today", "s_today", "c_tomorrow", "late"]
     same_day = [t("a", "anki", 11), t("s", "schoology", 1), t("c", "canvas", 6)]
     assert [x["id"] for x in todo(same_day, s, now)] == ["c", "s", "a"]  # same day: Canvas, Schoology, Anki
@@ -704,6 +749,14 @@ def selftest():
     s["scores"] = {"a": {"pts": 10, "due": 3, "on_time": True}, "b": {"pts": 3, "due": 1, "on_time": False},
                    "c": {"pts": 10, "due": 2, "on_time": True}}
     assert total(s) == 25
+    a = migrate({"focus_pts": 6, "scores": {"x": {"pts": 10, "due": 1, "on_time": True}}, "days": ["2026-10-04"]})
+    b = migrate({"focus_pts": 4, "hidden": ["h"], "days": ["2026-10-03"], "since": 5.0})
+    a["since"] = 9.0
+    b["focus"].append("2026-10-05T10:00:00 laptop")
+    merge(a, b)  # sessions numbered the same on both sides count once; new ones add up
+    assert (a["focus"], a["hidden"], a["days"], a["since"]) == (
+        ["legacy-1", "legacy-2", "legacy-3", "2026-10-05T10:00:00 laptop"], ["h"], ["2026-10-03", "2026-10-04"], 5.0)
+    assert total(a) == 18
     d = date(2026, 10, 7)
     s["days"] = ["2026-10-03", "2026-10-05", "2026-10-06"]
     assert streak(s, d) == 2  # today not done yet: yesterday's run still stands
