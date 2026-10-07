@@ -14,16 +14,19 @@ Setup, in ~/.local/share/dwm-school/ (share that folder with Syncthing to keep m
                    schoology_ics=webcal://...  (Schoology calendar export link)
   .stignore        tasks.json, lock, daemon.lock, *.tmp  (per machine; state.json is what syncs)
 
-Points: Canvas on time +10, late +3, missing -5 (Canvas reports which, nothing due before the first
-sync counts). Schoology's feed has no submission status, so you mark those done yourself from the
-menu: on time +10, late +3, no penalty. A finished focus session is +2. The streak is days in a row with
-something turned in on time or a finished focus session. Reminders go out 3 days, 1 day and 3 hours before a due date, plus a summary each morning.
+Points: on time +10, late +3, missing 0 (no penalties: they teach avoiding the tracker); +5 more for
+turning work in 24 hours or more early; about 1 in 4 completions pays double, decided per task so every
+machine agrees. Canvas reports status itself (nothing due before the first sync counts); Schoology's feed
+can't, so you mark those done from the menu. A finished focus session is +2. Every 100 points is a level.
+The streak is days in a row with something turned in on time or a finished focus session; every 7 active
+days earn a streak freeze (up to 2), which a missed day uses up instead of ending the streak. Reminders go out 3 days, 1 day and 3 hours before a due date, plus a summary each morning.
 """
 import fcntl
 import glob
 import math
 import json
 import os
+import random
 import re
 import shutil
 import signal
@@ -58,7 +61,11 @@ FOCUS_SECS = 600
 REST_SECS = 300
 NEXT_WINDOW = 1800  # after a session or break, the menu offers 10 more minutes for this long
 REMIND = [3 * 86400, 86400, 3 * 3600]  # seconds before due, longest first
-PTS = {"done": 10, "late": 3, "missing": -5}
+PTS = {"done": 10, "late": 3, "missing": 0}  # no penalty: punishment teaches avoiding the tracker
+EARLY, EARLY_BONUS = 86400, 5  # turned in this long before it's due: bonus points
+SURPRISE = 0.25  # chance a completion pays double, fixed per task so every machine agrees
+LEVEL = 100  # points per level
+FREEZE_EVERY, MAX_FREEZES = 7, 2  # active days that earn a streak freeze, and how many can be banked
 # Bar icons (Symbols Nerd Font): graduation cap, warning, coffee, star, flame
 TIMER = "󰔛"
 CAP, WARN, COFFEE, STAR, FIRE = "", "", "󰅶", "", "󰈸"
@@ -119,6 +126,8 @@ def migrate(s):
     for k, v in {"scores": {}, "hidden": [], "reminded": [], "focus": [], "days": []}.items():
         s.setdefault(k, v)
     legacy = [f"legacy-{i}" for i in range(1, s.pop("focus_pts", 0) // 2 + 1)]
+    for v in s["scores"].values():  # missing work used to cost 5 points; it costs nothing now
+        v["pts"] = max(v["pts"], 0)
     s["focus"] += [x for x in legacy if x not in s["focus"]]
     return s
 
@@ -305,8 +314,7 @@ def update_anki(tasks, errors):
         if cards:
             s["anki_day"] = today
         elif cards == 0 and s.get("anki_day") == today and anki_id not in s["scores"]:
-            s["scores"][anki_id] = {"pts": PTS["done"], "due": tonight, "on_time": True}
-            cheer(s, {"title": "Anki reviews done"}, PTS["done"])
+            award(s, {"id": anki_id, "title": "Anki reviews done", "due": tonight}, "done")
         anki_done = anki_id in s["scores"]
         focusing_anki = s.get("focus_task") == anki_id
     if focusing_anki and focus_end(TIMER) > time.time():  # keep the focus timer's text counting down too
@@ -347,21 +355,69 @@ def active(s):
         s["days"].append(today)
 
 
+def streak_info(s, today=None):
+    """(days in a row, freezes banked). Every FREEZE_EVERY active days in a run earn a freeze (up to
+    MAX_FREEZES), and a missed day spends one instead of ending the run. Worked out from the days list
+    alone, so it merges across machines. Today only counts against you once it's over."""
+    have = set(s.get("days", []))
+    if not have:
+        return 0, 0
+    today = today or date.today()
+    d, run, freezes = date.fromisoformat(min(have)), 0, 0
+    while d <= today:
+        if d.isoformat() in have:
+            run += 1
+            if run % FREEZE_EVERY == 0:
+                freezes = min(freezes + 1, MAX_FREEZES)
+        elif d < today:
+            if freezes:
+                freezes -= 1
+            else:
+                run = 0
+        d += timedelta(days=1)
+    return run, freezes
+
+
 def streak(s, today=None):
-    """Days in a row that counted. Today only breaks it once it's over, so it can still be saved."""
-    days, d = set(s.get("days", [])), today or date.today()
-    if d.isoformat() not in days:
-        d -= timedelta(days=1)
-    n = 0
-    while d.isoformat() in days:
-        n, d = n + 1, d - timedelta(days=1)
-    return n
+    return streak_info(s, today)[0]
 
 
-def cheer(s, t, pts):
+def level_info(pts):
+    """(level, points to the next one)."""
+    return pts // LEVEL + 1, LEVEL - pts % LEVEL
+
+
+def level_up(s, before):
+    lvl = level_info(total(s))[0]
+    if lvl > level_info(before)[0]:
+        notify(f"Level {lvl}!", f"{total(s)} pts", urgent=True)
+
+
+def award(s, t, status):
+    """Score a finished task: base points, the early bonus, and sometimes double."""
+    pts, notes = PTS[status], []
+    if status == "done" and time.time() <= t["due"] - EARLY:
+        pts += EARLY_BONUS
+        notes.append(f"+{EARLY_BONUS} for being early")
+    if pts > 0 and random.Random(t["id"]).random() < SURPRISE:
+        pts *= 2
+        notes.append("surprise: double points!")
+    s["scores"][t["id"]] = {"pts": pts, "due": t["due"], "on_time": status == "done", "status": status}
+    if pts > 0:
+        cheer(s, t, pts, notes)
+
+
+def cheer(s, t, pts, notes=()):
+    freezes_before = streak_info(s)[1]
     if pts >= PTS["done"]:  # on time
         active(s)
-    notify(f"+{pts} pts: {t['title']}", f"{total(s)} pts, {streak(s)}-day streak")
+    run, freezes = streak_info(s)
+    lvl, to_next = level_info(total(s))
+    notify(f"+{pts} pts: {t['title']}",
+           " · ".join([*notes, f"{total(s)} pts", f"Lv {lvl}, {to_next} to Lv {lvl + 1}", f"{run}-day streak"]))
+    level_up(s, total(s) - pts)
+    if freezes > freezes_before:
+        notify("Streak freeze earned", "If you miss a day, it saves your streak.")
 
 
 def score_canvas(s, t):
@@ -371,9 +427,14 @@ def score_canvas(s, t):
     if t["status"] not in PTS:
         s["scores"].pop(t["id"], None)
         return
-    s["scores"][t["id"]] = {"pts": PTS[t["status"]], "due": t["due"], "on_time": t["status"] == "done"}
-    if PTS[t["status"]] > 0 and (not old or old["pts"] <= 0):
-        cheer(s, t, PTS[t["status"]])
+    if old and old.get("status", legacy_status(old)) == t["status"]:
+        return  # already scored as this: an early or surprise bonus isn't worked out again
+    award(s, t, t["status"])
+
+
+def legacy_status(score):
+    """Scores from before "status" was stored."""
+    return "done" if score["on_time"] else "late" if score["pts"] > 0 else "missing"
 
 
 def mark_done(t, on_time=None):
@@ -386,8 +447,7 @@ def mark_done(t, on_time=None):
             return
         if on_time is None:
             on_time = time.time() <= t["due"]
-        s["scores"][t["id"]] = {"pts": 10 if on_time else 3, "due": t["due"], "on_time": on_time}
-        cheer(s, t, s["scores"][t["id"]]["pts"])
+        award(s, t, "done" if on_time else "late")
 
 
 # ---- what's next ----
@@ -490,6 +550,9 @@ def summary(s, items, now):
     week = [t for t in items if now <= t["due"] <= now + 7 * 86400]
     n_today = sum(t["due"] <= end_today for t in week)
     body = "\n".join(f"{left(t['due'] - now):>4}  {t['title']}" for t in week[:6]) or "Nothing due this week."
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    if yesterday not in s.get("days", []) and streak(s) > 0:
+        body = "A streak freeze saved your streak yesterday.\n" + body
     notify(f"{n_today} due today, {len(week)} this week. {total(s)} pts", body)
 
 
@@ -601,6 +664,7 @@ def focus(t, reopen=True):
         s["focus"].append(session_id())
         s["focus_next"] = time.time()
         active(s)
+        level_up(s, total(s) - 2)
         pts = total(s)
     tick()
     notify(f"Session done: +2 pts ({pts})", "Mod+a: 10 more minutes or a 5-minute break", urgent=True)
@@ -629,6 +693,7 @@ def finish():
     with state() as s:
         s["focus"].append(session_id())
         active(s)
+        level_up(s, total(s) - 2)
         t = next((x for x in tasks if x["id"] == s.get("focus_task")), None)
         notify("Finished early: +2 pts", f"{total(s)} pts")
     if t and t["source"] == "schoology":
@@ -651,7 +716,8 @@ def run_menu():
     now = time.time()
     with state() as s:
         items = todo(tasks, s, now)
-        prompt = f"{total(s)} pts, {streak(s)}-day streak"
+        (run, freezes), (lvl, to_next) = streak_info(s), level_info(total(s))
+        prompt = f"{total(s)} pts · Lv {lvl} ({to_next} to go) · {run}-day streak" + (f" · {freezes} freeze" if freezes else "")
         since = s.get("since", now)
         again = next_session(tasks, s, now)
     rows = []
@@ -763,6 +829,24 @@ def selftest():
     s["days"].append("2026-10-07")
     assert streak(s, d) == 3  # the gap on 10/04 ends it
     assert streak(s, date(2026, 10, 9)) == 0  # a whole day missed
+    s["days"] = [f"2026-10-{d:02}" for d in range(1, 8)] + ["2026-10-09"]
+    assert streak_info(s, date(2026, 10, 9)) == (8, 0)  # 7 days earned a freeze; it covered 10/08
+    s["days"].remove("2026-10-09")
+    assert streak_info(s, date(2026, 10, 10)) == (0, 0)  # two missed days, one freeze: the streak ends
+    assert level_info(0) == (1, 100) and level_info(250) == (3, 50)
+    assert migrate({"scores": {"m": {"pts": -5, "due": 1, "on_time": False}}})["scores"]["m"]["pts"] == 0
+    mem, notify = {"scores": {}, "days": [], "focus": []}, lambda *a, **k: None
+    try:
+        early = {"id": "early-task", "title": "x", "due": time.time() + 3 * 86400}
+        award(mem, early, "done")
+        doubled = random.Random("early-task").random() < SURPRISE
+        assert mem["scores"]["early-task"]["pts"] == (10 + EARLY_BONUS) * (2 if doubled else 1)
+        award(mem, {"id": "m2", "title": "x", "due": time.time() - 9}, "missing")
+        assert mem["scores"]["m2"]["pts"] == 0
+    finally:
+        notify = real_notify
+    hits = sum(random.Random(f"t{i}").random() < SURPRISE for i in range(1000))
+    assert 200 < hits < 300  # about 1 in 4
     assert (left(-90000), left(7200), left(59)) == ("1d late", "2h", "0m")
     assert break_until([t("x", "canvas", 100)], now) == now + 28 * 3600  # free until 3 days before it's due
     assert break_until([t("x", "canvas", 71)], now) is None  # due within 3 days: no break
