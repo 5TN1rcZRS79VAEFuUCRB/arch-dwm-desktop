@@ -46,11 +46,11 @@ nss-mdns
 maim
 xclip
 
-# --- notifications: dwm-school reminders (notify-send + dunst) ---
+# --- notifications: dwm-todo reminders (notify-send + dunst) ---
 dunst
 libnotify
 
-# --- dwm-school: opens assignments in the browser ---
+# --- dwm-todo: opens assignments in the browser ---
 xdg-utils
 
 # --- bar stats + helper scripts ---
@@ -70,7 +70,7 @@ qt6ct
 firefox
 keepassxc
 syncthing        # keeps the KeePassXC database in sync between machines
-anki             # flashcards; dwm-school shows today's due cards (its add-on is in home/.local/share/Anki2)
+anki             # flashcards; dwm-todo shows today's due cards (its add-on is in home/.local/share/Anki2)
 mpv              # plays the audio and video on Anki cards
 
 # --- Claude Code add-ons: the caveman proxy CLI is an npm package ---

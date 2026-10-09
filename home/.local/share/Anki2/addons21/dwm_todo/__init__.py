@@ -1,5 +1,5 @@
-# dwm-school: after every answered card, count today's due cards here (instant: Anki already has
-# them in memory), write the number where dwm-school reads it, and wake the dwm-school daemon, so
+# dwm-todo: after every answered card, count today's due cards here (instant: Anki already has
+# them in memory), write the number where dwm-todo reads it, and wake the dwm-todo daemon, so
 # the bar's "Anki: N cards" drops the moment you answer.
 import os
 import signal
@@ -8,8 +8,8 @@ from datetime import date
 from aqt import gui_hooks, mw
 
 RUN = os.environ.get("XDG_RUNTIME_DIR", os.path.expanduser("~/.cache"))
-COUNT = os.path.join(RUN, "dwm-school-anki")
-PIDFILE = os.path.join(RUN, "dwm-school.pid")
+COUNT = os.path.join(RUN, "dwm-todo-anki")
+PIDFILE = os.path.join(RUN, "dwm-todo.pid")
 
 
 def answered(*_):

@@ -39,7 +39,7 @@ of X and run `startx` again.
 | --- | --- |
 | dwm, st, dmenu (built from the sources in `suckless/`) | `~/.local/src/` and `/usr/local/bin/` |
 | `.xinitrc`, `.Xresources` (scaling, cursor), `.bash_profile` (starts X when you log in on tty1) | `~/` |
-| Bar, audio, tray, network (`dwm-net`), battery (`dwm-power`), mouse speed (`dwm-mouse`), school assignments (`dwm-school`) and screenshot scripts, the idle screen-off (`dwm-blank`), plus a `keepassxc` launcher (slightly smaller text at high DPI) | `~/.local/bin/` |
+| Bar, audio, tray, network (`dwm-net`), battery (`dwm-power`), mouse speed (`dwm-mouse`), school assignments and to-dos (`dwm-todo`) and screenshot scripts, the idle screen-off (`dwm-blank`), plus a `keepassxc` launcher (slightly smaller text at high DPI) | `~/.local/bin/` |
 | GTK 3/4, Qt 5/6 and xdg-portal dark-mode config, minimal dunst notifications in the bar's colors | `~/.config/` |
 | Firefox settings: dark mode, privacy, no AI or sponsored content (`user.js`) | your Firefox profile directory |
 | Firefox as the default browser, so links from other programs open there | `~/.config/mimeapps.list` |
@@ -130,9 +130,9 @@ limit is holding it, and `!` when it is at 15% or below. Nothing is shown on a d
 any charge limit and, if `power-profiles-daemon` is installed, the power profile, which you can
 switch by choosing one.
 
-## School assignments
+## School assignments and to-dos
 
-`dwm-school` puts the next Canvas or Schoology assignment at the left of the status text (title and
+`dwm-todo` puts the next Canvas or Schoology assignment, `todo.txt` task or today's pushups at the left of the status text (title and
 time left, points and a streak of days in a row with something turned in on time or a finished focus
 session, where every 7 active days earn a streak freeze that saves a missed day; never a count of late work) and sends reminders 3 days, 1 day and 3 hours before
 each due date, plus a summary every morning. `Mod+A` opens a dmenu list: start a 10-minute focus session
@@ -140,6 +140,10 @@ each due date, plus a summary every morning. `Mod+A` opens a dmenu list: start a
 says so and `Mod+A` offers 10 more minutes, a 5-minute break, or stopping for now without finishing, so nothing grabs the keyboard while you
 type; **Finished it** ends a session early and checks the task off), open an assignment in the browser,
 or mark Schoology work done.
+
+Your own tasks go in `~/.local/share/dwm-todo/todo.txt`, one per line (`2026-10-13 21:00 Poster board`; with
+no time, due at 11:59 pm) and are marked done from the menu like Schoology work. Pushups are a task every
+day: picking them checks off a set to failure and starts a 2-minute rest in the bar, and the third set scores them.
 
 Points: on time +10, late +3, missing 0 (no penalties); +5 more for turning work in 24 hours or more early;
 about 1 in 4 completions pays double (decided per task, so every machine agrees); every 100 points is a level.
@@ -151,10 +155,10 @@ focus session is +2. Upcoming work comes first, and on the same day Canvas, then
 due within 2 days, late work moves to the top. When nothing is late and nothing is due within 3 days,
 the bar shows a break (`free until Sun 10/11`) instead; it ends when the next 3-day reminder fires.
 
-It needs two things that are never in this repo, both in `~/.local/share/dwm-school/`:
+It needs two things that are never in this repo, both in `~/.local/share/dwm-todo/`:
 
 * `canvas_token`: Canvas → Account → Settings → **New Access Token** (chmod 600)
-* `dwm-school.conf`:
+* `dwm-todo.conf`:
 
   ```
   canvas_url=https://yourschool.instructure.com
@@ -169,16 +173,19 @@ It needs two things that are never in this repo, both in `~/.local/share/dwm-sch
 `install.sh` also installs Anki (with `mpv` for card audio). Once you sign in with Anki's Sync button,
 today's due cards show up as `Anki: N cards`, due at 11:59 PM; opening it starts Anki, and getting to zero is +10 and a
 streak day. The cards are counted on a copy of the collection, so Anki can stay open. While you study,
-the count drops the moment you answer a card: a small Anki add-on (`~/.local/share/Anki2/addons21/dwm_school`,
-loaded the next time Anki starts) counts inside Anki and wakes dwm-school, and it re-checks every 5 seconds
-as a backup.
+the count drops the moment you answer a card: a small Anki add-on (`~/.local/share/Anki2/addons21/dwm_todo`,
+loaded the next time Anki starts) counts inside Anki and wakes dwm-todo, and it re-checks every 5 seconds
+as a backup. A second add-on (`~/.local/share/Anki2/addons21/pass_fail`) hides the Hard and Easy buttons
+and ignores the `2` and `4` keys, so reviews are just Again (`1`) or Good (`3`/Space).
 
-Then run `dwm-school sync` to check it. `dwm-school selftest` checks the parser and scoring.
+Then run `dwm-todo sync` to check it. `dwm-todo selftest` checks the parser and scoring.
 
 To keep points, marked-done work, the token and the config the same on several machines, share
-`~/.local/share/dwm-school` with Syncthing (folder ID `dwm-school`) and put a `.stignore` in it with
+`~/.local/share/dwm-todo` with Syncthing (folder ID `dwm-school`, kept from before the rename so existing machines still match) and put a `.stignore` in it with
 `tasks.json`, `lock`, `daemon.lock` and `*.tmp`, so each machine fetches its own assignment list. Before
-sharing to a machine that already ran `dwm-school`, delete its `state.json` so the empty one doesn't win.
+sharing to a machine that already ran `dwm-todo`, delete its `state.json` so the empty one doesn't win.
+A machine that still has `~/.local/share/dwm-school` gets it moved to `dwm-todo` on the first run; point
+its Syncthing folder at the new path (`syncthing cli config folders dwm-school path set ~/.local/share/dwm-todo`).
 
 ## Screenshots
 
@@ -208,7 +215,7 @@ screen saver are honoured, because `dwm-blank` follows the X server's own saver 
 * **Monitor refresh rate and G-SYNC.** These depend on the monitor and output name, so `.xinitrc`
   only has a commented-out `xrandr` example to edit.
 * **All server software** (Jellyfin, Radarr/Sonarr, Docker, Cloudflare and so on) and any
-  passwords or API keys, including the Canvas token and Schoology feed link for `dwm-school`.
+  passwords or API keys, including the Canvas token and Schoology feed link for `dwm-todo`.
 
 ## Updating this repo
 

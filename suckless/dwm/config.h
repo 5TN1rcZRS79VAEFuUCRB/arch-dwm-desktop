@@ -80,7 +80,7 @@ static const char *traymenucmd[] = { "dwm-tray", "menu", NULL };
 static const char *netmenucmd[]   = { "dwm-net", NULL };
 static const char *powermenucmd[] = { "dwm-power", NULL };
 static const char *mousemenucmd[] = { "dwm-mouse", NULL };
-static const char *schoolcmd[]    = { "dwm-school", "menu", NULL };
+static const char *todocmd[]      = { "dwm-todo", "menu", NULL };
 static const char *shotcmd[]     = { "dwm-shot", NULL };
 static const char *shotareacmd[] = { "dwm-shot", "area", NULL };
 
@@ -121,7 +121,7 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_n,      spawn,          {.v = netmenucmd } },
 	{ MODKEY|ShiftMask,             XK_p,      spawn,          {.v = powermenucmd } },
 	{ MODKEY|ShiftMask,             XK_m,      spawn,          {.v = mousemenucmd } },
-	{ MODKEY,                       XK_a,      spawn,          {.v = schoolcmd } },
+	{ MODKEY,                       XK_a,      spawn,          {.v = todocmd } },
 	{ 0,                            XK_Print,  spawn,          {.v = shotcmd } },
 	{ ShiftMask,                    XK_Print,  spawn,          {.v = shotareacmd } },
 	{ 0,                            XF86XK_AudioRaiseVolume, spawn, {.v = volupcmd } },

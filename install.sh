@@ -137,7 +137,7 @@ if command -v firefox >/dev/null; then
 	# The Always-visible userscript ships in this repo, but Violentmonkey keeps its scripts in its
 	# own storage, which a policy cannot seed, so it is imported by hand once (see the line printed).
 	sudo_place firefox/policies.json /etc/firefox/policies/policies.json
-	# Links opened from other programs (dwm-school, chat apps) go to Firefox, not another installed browser.
+	# Links opened from other programs (dwm-todo, chat apps) go to Firefox, not another installed browser.
 	{ xdg-settings set default-web-browser firefox.desktop && xdg-mime default firefox.desktop text/html; } \
 		|| warn "could not make Firefox the default browser; run: xdg-settings set default-web-browser firefox.desktop"
 	echo "Violentmonkey will auto-install; import the userscript once by opening this in Firefox:"

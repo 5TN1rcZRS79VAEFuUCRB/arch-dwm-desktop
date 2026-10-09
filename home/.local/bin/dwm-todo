@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
 """
-dwm-school: Canvas + Schoology assignments in the dwm bar, with points, a streak and reminders.
+dwm-todo: Canvas + Schoology assignments, your own to-dos and daily pushups in the dwm bar, with points,
+a streak and reminders.
 
-  dwm-school daemon    sync every 5 min, refresh the bar and send reminders every minute (~/.xinitrc)
-  dwm-school sync      sync once and print the bar text and any errors
-  dwm-school menu      dmenu: next task, 10-minute focus timer, open / mark done (Mod+a in config.h)
-  dwm-school selftest  check the feed parser, ordering and scoring
+  dwm-todo daemon    sync every 5 min, refresh the bar and send reminders every minute (~/.xinitrc)
+  dwm-todo sync      sync once and print the bar text and any errors
+  dwm-todo menu      dmenu: next task, 10-minute focus timer, open / mark done (Mod+a in config.h)
+  dwm-todo selftest  check the feed parser, ordering and scoring
 
-Setup, in ~/.local/share/dwm-school/ (share that folder with Syncthing to keep machines in step):
+Setup, in ~/.local/share/dwm-todo/ (share that folder with Syncthing to keep machines in step):
   canvas_token     Canvas access token (Account > Settings > New Access Token), chmod 600
-  dwm-school.conf  canvas_url=https://yourschool.instructure.com
+  dwm-todo.conf    canvas_url=https://yourschool.instructure.com
                    canvas_token_expires=2027-01-01  (warns daily in the last week)
                    schoology_ics=webcal://...  (Schoology calendar export link)
+  todo.txt         your own tasks, one per line: 2026-10-13 20:00 Poster board  (time optional: end of day)
   .stignore        tasks.json, lock, daemon.lock, *.tmp  (per machine; state.json is what syncs)
 
 Points: on time +10, late +3, missing 0 (no penalties: they teach avoiding the tracker); +5 more for
 turning work in 24 hours or more early; about 1 in 4 completions pays double, decided per task so every
 machine agrees. Canvas reports status itself (nothing due before the first sync counts); Schoology's feed
-can't, so you mark those done from the menu. A finished focus session is +2. Every 100 points is a level.
+can't, so you mark those (and todo.txt tasks) done from the menu. Pushups are a task every day: the menu
+checks off each set and starts a 2-minute rest, and the last set scores it. A finished focus session is +2. Every 100 points is a level.
 The streak is days in a row with something turned in on time or a finished focus session; every 7 active
 days earn a streak freeze (up to 2), which a missed day uses up instead of ending the streak. Reminders go out 3 days, 1 day and 3 hours before a due date, plus a summary each morning.
 """
@@ -42,15 +45,16 @@ from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 HOME = os.path.expanduser("~")
-DATA = os.path.join(os.environ.get("XDG_DATA_HOME", f"{HOME}/.local/share"), "dwm-school")
-CONF = f"{DATA}/dwm-school.conf"
+DATA = os.path.join(os.environ.get("XDG_DATA_HOME", f"{HOME}/.local/share"), "dwm-todo")
+CONF = f"{DATA}/dwm-todo.conf"
+TODO = f"{DATA}/todo.txt"
 TOKEN = f"{DATA}/canvas_token"
 RUN = os.environ.get("XDG_RUNTIME_DIR", f"{HOME}/.cache")
-BAR = f"{RUN}/dwm-school-bar"      # one line, read by dwm-status.sh
-ANKI_COUNT = f"{RUN}/dwm-school-anki"  # "<date> <due>", written by the Anki add-on after each answered card
-PIDFILE = f"{RUN}/dwm-school.pid"  # the daemon; the Anki add-on sends it SIGUSR1 after every answered card
-STICKY = f"{RUN}/dwm-school-sticky"  # ids of notifications that stay until clicked; Mod+a closes them
-FOCUS = f"{RUN}/dwm-school-focus"  # "<end epoch> <icon> <text>": the running focus/break timer, read by dwm-status.sh
+BAR = f"{RUN}/dwm-todo-bar"      # one line, read by dwm-status.sh
+ANKI_COUNT = f"{RUN}/dwm-todo-anki"  # "<date> <due>", written by the Anki add-on after each answered card
+PIDFILE = f"{RUN}/dwm-todo.pid"  # the daemon; the Anki add-on sends it SIGUSR1 after every answered card
+STICKY = f"{RUN}/dwm-todo-sticky"  # ids of notifications that stay until clicked; Mod+a closes them
+FOCUS = f"{RUN}/dwm-todo-focus"  # "<end epoch> <icon> <text>": the running focus/break timer, read by dwm-status.sh
 DMENU = ["dmenu", "-i", "-l", "15"]
 
 LOOKBACK = 14 * 86400  # overdue work older than this drops off the list
@@ -69,9 +73,11 @@ FREEZE_EVERY, MAX_FREEZES = 7, 2  # active days that earn a streak freeze, and h
 # Bar icons (Symbols Nerd Font): graduation cap, warning, coffee, star, flame
 TIMER = "󰔛"
 CAP, WARN, COFFEE, STAR, FIRE = "", "", "󰅶", "", "󰈸"
-PRIORITY = {"canvas": 1, "schoology": 2, "anki": 3}  # breaks ties between things due the same day
+PRIORITY = {"canvas": 1, "schoology": 2, "todo": 2, "pushups": 3, "anki": 3}  # breaks ties on the same day
+MANUAL = ("schoology", "todo", "pushups")  # nothing reports these done: they're checked off from the menu
 LATE_FIRST = 2 * 86400  # nothing due within this long: late work moves to the top
-SCHOOLOGY_LATE = 7 * 86400  # late Schoology work stays listed this long (its feed can't say it was turned in)
+MANUAL_LATE = 7 * 86400  # late manual work stays listed this long (nothing can say it was turned in)
+SETS, SET_REST = 3, 120  # daily pushups: sets to failure, and the rest after each one
 BREAK = 3 * 86400  # nothing late and nothing due within this long: a break (ends when the 3-day reminder fires)
 
 
@@ -123,7 +129,7 @@ def state():
 def migrate(s):
     """Fill in defaults. focus_pts (a running total) became focus (one entry per finished session),
     which two machines can merge; the old total turns into numbered entries, the same on every machine."""
-    for k, v in {"scores": {}, "hidden": [], "reminded": [], "focus": [], "days": []}.items():
+    for k, v in {"scores": {}, "hidden": [], "reminded": [], "focus": [], "days": [], "sets": []}.items():
         s.setdefault(k, v)
     legacy = [f"legacy-{i}" for i in range(1, s.pop("focus_pts", 0) // 2 + 1)]
     for v in s["scores"].values():  # missing work used to cost 5 points; it costs nothing now
@@ -137,7 +143,7 @@ def merge(s, other):
     other = migrate(other)
     for k, v in other["scores"].items():
         s["scores"].setdefault(k, v)
-    for key in ("hidden", "reminded", "focus", "days"):
+    for key in ("hidden", "reminded", "focus", "days", "sets"):
         s[key] += [x for x in other[key] if x not in s[key]]
     s["days"].sort()
     for key in ("summary_day", "anki_day", "token_warned"):  # ISO dates: the later one
@@ -237,12 +243,42 @@ def schoology_tasks(feed):
             events = parse_ics(f.read())
     else:
         feed = re.sub(r"^webcal://", "https://", feed)
-        with urlopen(Request(feed, headers={"User-Agent": "dwm-school"}), timeout=30) as r:
+        with urlopen(Request(feed, headers={"User-Agent": "dwm-todo"}), timeout=30) as r:
             events = parse_ics(r.read().decode("utf-8", "replace"))
     now = time.time()
     # Calendar events (fundraisers, meetings) link to /event/; everything else is work to turn in.
     return [dict(e, url=re.sub(r"^http://", "https://", e["url"])) for e in events
             if "/event/" not in e["url"] and now - LOOKBACK < e["due"] < now + AHEAD]
+
+
+def tonight():
+    return datetime.now().replace(hour=23, minute=59, second=0, microsecond=0).timestamp()
+
+
+def parse_todo(text):
+    """todo.txt lines: "2026-10-13 20:00 Poster board", the time optional (then due at 23:59)."""
+    tasks = []
+    for line in text.splitlines():
+        m = re.match(r"(\d{4}-\d{2}-\d{2})(?: (\d{1,2}:\d{2}))? +(\S.*)", line.strip())
+        if m:
+            due = datetime.strptime(f"{m[1]} {m[2] or '23:59'}", "%Y-%m-%d %H:%M").timestamp()
+            tasks.append({"id": f"t:{m[1]} {m[3]}", "source": "todo", "title": m[3], "course": "",
+                          "due": due, "status": "todo", "url": ""})
+    return tasks
+
+
+def todo_tasks():
+    try:
+        with open(TODO) as f:
+            return parse_todo(f.read())
+    except FileNotFoundError:
+        return []
+
+
+def pushups_task():
+    """Only ever today's: pushups can't be done ahead for another day, and a missed day just goes away."""
+    return {"id": f"pushups:{date.today().isoformat()}", "source": "pushups", "title": f"Pushups: {SETS} sets to failure",
+            "course": "", "due": tonight(), "status": "todo", "url": ""}
 
 
 def anki_due():
@@ -292,6 +328,12 @@ def sync():
             errors.append("canvas: token expired or wrong, make a new one and update canvas_token_expires" if expired
                           else f"{source}: {e}")
             tasks += [t for t in old if t["source"] == source]
+    try:
+        tasks += todo_tasks()
+    except ValueError as e:  # a bad date in todo.txt
+        errors.append(f"todo.txt: {e}")
+        tasks += [t for t in old if t["source"] == "todo"]
+    tasks.append(pushups_task())
     with state() as s:
         s.setdefault("since", time.time())
         for t in tasks:
@@ -309,19 +351,18 @@ def update_anki(tasks, errors):
         cards = None
     # Anki is a task for today only: finishing today's cards (due goes from some to none) scores it.
     today, anki_id = date.today().isoformat(), f"anki:{date.today().isoformat()}"
-    tonight = datetime.now().replace(hour=23, minute=59, second=0, microsecond=0).timestamp()
     with state() as s:
         if cards:
             s["anki_day"] = today
         elif cards == 0 and s.get("anki_day") == today and anki_id not in s["scores"]:
-            award(s, {"id": anki_id, "title": "Anki reviews done", "due": tonight}, "done")
+            award(s, {"id": anki_id, "title": "Anki reviews done", "due": tonight()}, "done")
         anki_done = anki_id in s["scores"]
         focusing_anki = s.get("focus_task") == anki_id
     if focusing_anki and focus_end(TIMER) > time.time():  # keep the focus timer's text counting down too
         write(FOCUS, f"{focus_end()} {TIMER} {'Anki: done' if anki_done else f'Anki: {cards} cards'}\n")
     if cards and not anki_done:
         tasks.append({"id": anki_id, "source": "anki", "title": f"Anki: {cards} cards", "course": "",
-                      "due": tonight, "status": "todo", "url": ""})
+                      "due": tonight(), "status": "todo", "url": ""})
     write(f"{DATA}/tasks.json", json.dumps({"tasks": tasks, "errors": errors}))
     return errors
 
@@ -457,8 +498,8 @@ def todo(tasks, s, now):
     PRIORITY (Canvas, Schoology, Anki) on the same day; then overdue,
     most recent first (likeliest to still be accepted). With nothing due soon, overdue goes first."""
     keep = [t for t in tasks if t["id"] not in s["hidden"] and (
-        t["status"] in ("todo", "missing") if t["source"] != "schoology"
-        else t["id"] not in s["scores"] and t["due"] > now - SCHOOLOGY_LATE)]
+        t["status"] in ("todo", "missing") if t["source"] not in MANUAL
+        else t["id"] not in s["scores"] and t["due"] > now - (0 if t["source"] == "pushups" else MANUAL_LATE))]
     day = lambda t: time.strftime("%Y%m%d", time.localtime(t["due"]))
     items = sorted(keep, key=lambda t: (False, day(t), PRIORITY[t["source"]], t["due"]) if t["due"] >= now
                    else (True, -t["due"]))
@@ -493,7 +534,7 @@ def bar_text(tasks, errors, s, now):
     if items:
         head = f"{short(items[0]['title'])} ({left(items[0]['due'] - now)})"
     else:
-        head = "run dwm-school sync" if errors and not tasks else "all caught up"
+        head = "run dwm-todo sync" if errors and not tasks else "all caught up"
     parts = [(f"{WARN} " if errors else f"{CAP} ") + head]
     parts.append(f"{STAR} {total(s)} {FIRE} {streak(s)}")
     return " | ".join(parts)
@@ -502,7 +543,7 @@ def bar_text(tasks, errors, s, now):
 def notify(title, body="", urgent=False):
     """Urgent ones stay until clicked (dunstrc) or until Mod+a opens the menu (close_sticky)."""
     try:
-        p = subprocess.run(["notify-send", "-p", "-a", "dwm-school", "-u", "critical" if urgent else "normal",
+        p = subprocess.run(["notify-send", "-p", "-a", "dwm-todo", "-u", "critical" if urgent else "normal",
                             title, body], capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.TimeoutExpired):
         return
@@ -565,7 +606,7 @@ def token_warning(s, now):
     if days <= 7:
         s["token_warned"] = today
         notify(f"Canvas token expires in {max(0, math.ceil(days))} days",
-               f"Account > Settings > New Access Token, save it to {TOKEN}, update dwm-school.conf", urgent=True)
+               f"Account > Settings > New Access Token, save it to {TOKEN}, update dwm-todo.conf", urgent=True)
 
 
 def tick():
@@ -585,7 +626,7 @@ def daemon():
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
-        sys.exit("dwm-school daemon is already running")
+        sys.exit("dwm-todo daemon is already running")
     write(PIDFILE, f"{os.getpid()}\n")
     # SIGUSR1 (from the Anki add-on, after each answered card) is taken by sigtimedwait below, which
     # wakes the loop at once instead of at its next interval.
@@ -604,7 +645,7 @@ def daemon():
             try:
                 step()
             except Exception as e:
-                print(f"dwm-school {step.__name__}: {e}", file=sys.stderr)
+                print(f"dwm-todo {step.__name__}: {e}", file=sys.stderr)
         if poked:
             redraw_bar()
         poked = signal.sigtimedwait([signal.SIGUSR1], ANKI_EVERY if anki_open else 60) is not None
@@ -679,6 +720,23 @@ def rest(t):
         notify(f"Break's over: {t['title']}", "Mod+a: 10 more minutes", urgent=True)
 
 
+def sets_today(s):
+    return sum(x.startswith(date.today().isoformat()) for x in s["sets"])
+
+
+def pushup_set():
+    """One set to failure done: the last one scores today's pushups, the others start the rest timer.
+    Always today's task, never the one the menu listed: after midnight, yesterday's can't be finished late."""
+    t = pushups_task()
+    with state() as s:
+        n = sets_today(s) + 1
+        s["sets"].append(f"{date.today().isoformat()} {n} {os.uname().nodename}")
+        if n >= SETS:
+            award(s, t, "done")
+    if n < SETS and timer(SET_REST, COFFEE, f"rest, then set {n + 1}"):
+        notify(f"Rest's over: set {n + 1} of {SETS}", "To failure. Mod+a when it's done.", urgent=True)
+
+
 def next_session(tasks, s, now):
     """The task to offer "10 more minutes" on: a session or break ended within NEXT_WINDOW."""
     if now - s.get("focus_next", 0) > NEXT_WINDOW:
@@ -696,7 +754,7 @@ def finish():
         level_up(s, total(s) - 2)
         t = next((x for x in tasks if x["id"] == s.get("focus_task")), None)
         notify("Finished early: +2 pts", f"{total(s)} pts")
-    if t and t["source"] == "schoology":
+    if t and t["source"] in MANUAL:
         mark_done(t)
     else:
         sync()  # Canvas: picks up the submission (and its +10) now instead of in 5 minutes
@@ -720,7 +778,9 @@ def run_menu():
         prompt = f"{total(s)} pts · Lv {lvl} ({to_next} to go) · {run}-day streak" + (f" · {freezes} freeze" if freezes else "")
         since = s.get("since", now)
         again = next_session(tasks, s, now)
+        sets = sets_today(s)
     rows = []
+    first = next((t for t in items if t["source"] != "pushups"), None)  # pushups get no focus timer
     if again and not focus_end():
         rows += [(f"10 more minutes: {again['title']}", ("more", again)), ("5-minute break", ("rest", again)),
                  ("Stop for now (not finished)", ("pause", again))]
@@ -728,21 +788,27 @@ def run_menu():
         rows.append(("Finished it", ("finish", None)))
     if focus_end() > now:
         rows.append(("Stop timer", ("stop", None)))
-    elif items and not again:
-        rows.append((f">> Start 10-min focus: {items[0]['title']}", ("focus", items[0])))
+    elif first and not again:
+        rows.append((f">> Start 10-min focus: {first['title']}", ("focus", first)))
     rows += [(f"{left(t['due'] - now):>8}  {t['course'] + ': ' if t['course'] else ''}{t['title']}", ("task", t))
              for t in items]
     rows.append(("Sync now", ("sync", None)))
     act, t = dmenu(rows, prompt) or (None, None)
     if act == "task":
-        opener = "Open Anki" if t["source"] == "anki" else "Open in browser"
-        sub = [("Start 10-min focus", ("focus", t)), (opener, ("open", t))]
-        if t["source"] == "schoology" and t["due"] < now:  # past due: it may have gone in on time anyway
+        sub = [("Start 10-min focus", ("focus", t))]
+        if t["source"] == "pushups":
+            rest_note = f": {SET_REST // 60}-min rest" if sets + 1 < SETS else ""
+            sub = [(f"Set {sets + 1} of {SETS} done{rest_note}", ("set", t))]
+        elif t["source"] == "anki" or t["url"]:
+            sub.append(("Open Anki" if t["source"] == "anki" else "Open in browser", ("open", t)))
+        if t["source"] in ("schoology", "todo") and t["due"] < now:  # past due: it may have gone in on time anyway
             sub += [("Turned it in on time", ("done_on_time", t)), ("Turned it in late", ("done_late", t))]
             if t["due"] < since:  # from before the tracker: or just clear it, no points
-                sub += [("Done before dwm-school (no points)", ("done", t))]
-        elif t["source"] == "schoology":
-            sub += [("Mark done", ("done", t))]
+                sub += [("Done before dwm-todo (no points)", ("done", t))]
+        elif t["source"] in ("schoology", "todo"):  # not due yet: on time, maybe early
+            early = now <= t["due"] - EARLY
+            sub += [(f"Turned it in (+{PTS['done'] + EARLY_BONUS} early)" if early else f"Turned it in (+{PTS['done']})",
+                     ("done", t))]
         if t["source"] == "schoology":
             sub += [("Hide (not an assignment)", ("hide", t))]
         act, t = dmenu(sub, short(t["title"], 40)) or (None, None)
@@ -759,6 +825,8 @@ def run_menu():
         finish()
     elif act == "stop":
         os.remove(FOCUS)
+    elif act == "set":
+        pushup_set()
     elif act == "open":
         open_url(t)
     elif act == "sync":
@@ -772,7 +840,7 @@ def run_menu():
     elif act == "hide":
         with state() as s:
             s["hidden"].append(t["id"])
-    if act in ("sync", "done", "done_on_time", "done_late", "hide"):
+    if act in ("sync", "done", "done_on_time", "done_late", "hide", "set"):
         tick()
 
 
@@ -807,6 +875,11 @@ def selftest():
         assert mem["scores"]["s_8d"]["pts"] == 10
     finally:
         state, notify = real_state, real_notify
+    mine = parse_todo("# note\n2026-10-13 20:00 Poster board\n2026-10-14 Essay\nnot a task\n")
+    assert [(x["title"], x["due"]) for x in mine] == [("Poster board", datetime(2026, 10, 13, 20, 0).timestamp()),
+                                                     ("Essay", datetime(2026, 10, 14, 23, 59).timestamp())], mine
+    manual = [t("todo1", "todo", 30), t("push", "pushups", 11), t("push_done", "pushups", 11), t("push_old", "pushups", -1)]
+    assert [x["id"] for x in todo(manual, dict(s, scores={"push_done": {}}), now)] == ["push", "todo1"]
     gap = [t("late_old", "canvas", -50, "missing"), t("late_new", "canvas", -5, "missing"), t("far", "canvas", 72)]
     assert [x["id"] for x in todo(gap, s, now)] == ["late_new", "late_old", "far"]  # nothing due in 2 days
     gap[2]["due"] = now + 30 * 3600
@@ -855,7 +928,17 @@ def selftest():
     print("ok")
 
 
+def rename_old():
+    """dwm-school became dwm-todo: move its folder over once (Syncthing's folder path needs the same change)."""
+    old = os.path.join(os.path.dirname(DATA), "dwm-school")
+    if os.path.isdir(old) and not os.path.exists(DATA):
+        os.rename(old, DATA)
+        if os.path.exists(f"{DATA}/dwm-school.conf"):
+            os.rename(f"{DATA}/dwm-school.conf", CONF)
+
+
 def main():
+    rename_old()
     cmds = {"daemon": daemon, "menu": run_menu, "selftest": selftest}
     if sys.argv[1:] == ["sync"]:
         errors = sync()

@@ -5,7 +5,7 @@ These are vendored copies of the suckless.org tools, based on:
 Local changes on top of upstream:
   dwm    config.h: monochrome look, Mod+F10/F11/F12 + media keys for volume, Mod+O /
          Mod+Shift+O for the output/input pickers, Mod+Shift+T / right-click on the bar title for the
-         tray menu, scroll/click actions on the status text, Mod+A for dwm-school, Symbols Nerd Font
+         tray menu, scroll/click actions on the status text, Mod+A for dwm-todo, Symbols Nerd Font
          fallback for the bar icons, barpad (taller bar)
          dwm.c: new windows are shrunk to fit the screen (oversized GTK file choosers); bar height
          adds barpad

@@ -95,9 +95,9 @@ trap 'exit' TERM  # so a kill runs the EXIT cleanup above
 # immediately instead of waiting out the one-second sleep below.
 echo $$ > "$PIDFILE"
 
-# Next assignment, points and the focus countdown, written by dwm-school.
-SCHOOL_BAR="${XDG_RUNTIME_DIR:-$HOME/.cache}/dwm-school-bar"
-SCHOOL_FOCUS="${XDG_RUNTIME_DIR:-$HOME/.cache}/dwm-school-focus"
+# Next assignment, points and the focus countdown, written by dwm-todo.
+TODO_BAR="${XDG_RUNTIME_DIR:-$HOME/.cache}/dwm-todo-bar"
+TODO_FOCUS="${XDG_RUNTIME_DIR:-$HOME/.cache}/dwm-todo-focus"
 trap : USR1
 
 while true; do
@@ -111,9 +111,9 @@ while true; do
 	[ -n "$ctemp" ] && stats+=" ${ctemp}°"
 	[ -n "$gpu_util" ] && stats+=" | 󰢮 ${gpu_util}% ${gpu_temp}°"
 
-	hw=""; read -r hw < "$SCHOOL_BAR" 2>/dev/null
+	hw=""; read -r hw < "$TODO_BAR" 2>/dev/null
 	# A running focus or break timer replaces the next-assignment text: "<icon> 7:32 <task>".
-	fend=0; read -r fend ficon ftext < "$SCHOOL_FOCUS" 2>/dev/null
+	fend=0; read -r fend ficon ftext < "$TODO_FOCUS" 2>/dev/null
 	if [ "${fend:-0}" -gt "$EPOCHSECONDS" ] 2>/dev/null; then
 		left=$((fend - EPOCHSECONDS))
 		printf -v hw '%s %d:%02d %s' "$ficon" $((left / 60)) $((left % 60)) "$ftext"
