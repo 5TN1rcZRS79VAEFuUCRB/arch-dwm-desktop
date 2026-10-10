@@ -48,7 +48,7 @@ command -v pacman >/dev/null || die "this installer is for Arch Linux (pacman no
 command -v sudo   >/dev/null || die "sudo is required"
 
 BACKUP="$HOME/.desktop-backup/$(date +%Y%m%d-%H%M%S)"
-BACKED_UP=0
+REPLACED=()
 
 backup_if_different() { # dest src
 	local dest=$1 src=$2 rel
@@ -56,7 +56,7 @@ backup_if_different() { # dest src
 		rel=${dest#"$HOME"/}
 		mkdir -p "$BACKUP/$(dirname "$rel")"
 		cp -a "$dest" "$BACKUP/$rel"
-		BACKED_UP=1
+		REPLACED+=("$rel")
 	fi
 }
 
@@ -289,7 +289,11 @@ fi
 
 # ---------------------------------------------------------------- done
 say "Done"
-[ "$BACKED_UP" -eq 1 ] && echo "Existing files that were replaced are saved in: $BACKUP"
+# Hand edits to these files are gone from the live copies; copy back into the repo any worth keeping.
+if [ ${#REPLACED[@]} -gt 0 ]; then
+	warn "these files differed from the repo and were replaced (old copies in $BACKUP):"
+	printf '  ~/%s\n' "${REPLACED[@]}" >&2
+fi
 cat <<EOF
 
 Next steps:
