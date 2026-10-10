@@ -167,9 +167,12 @@ for f in etc/X11/xorg.conf.d/*.conf; do
 done
 
 # Replugging a mouse re-applies the dwm-mouse settings (Mod+Shift+M): the rule starts a user service.
-say "udev: re-apply mouse settings on replug"
+# The 70- rule lets the same menu read a Razer mouse's DPI without root.
+say "udev: re-apply mouse settings on replug, Razer DPI access"
 sudo_place etc/udev/rules.d/90-dwm-mouse.rules /etc/udev/rules.d/90-dwm-mouse.rules
+sudo_place etc/udev/rules.d/70-dwm-mouse-dpi.rules /etc/udev/rules.d/70-dwm-mouse-dpi.rules
 sudo udevadm control --reload || warn "could not reload udev rules; they take effect after a reboot"
+sudo udevadm trigger --subsystem-match=hidraw --action=change 2>/dev/null || true
 systemctl --user daemon-reload 2>/dev/null || true
 
 # ---------------------------------------------------------------- local hostnames (mDNS)

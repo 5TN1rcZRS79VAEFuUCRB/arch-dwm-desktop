@@ -2,7 +2,8 @@
 #
 # dwm-mouse: mouse sensitivity and acceleration profile (libinput, via xinput).
 #
-#   dwm-mouse                     dmenu: pick a speed (or type one, -1 to 1) or the accel profile
+#   dwm-mouse                     dmenu: pick a speed (or type one, -1 to 1) or the accel profile;
+#                                 the prompt also shows a Razer mouse's DPI
 #   dwm-mouse speed -0.5          set the speed, -1 (slowest) to 1 (fastest), 0 is neutral
 #   dwm-mouse profile flat        flat (no acceleration, best for games) or adaptive
 #   dwm-mouse apply               re-apply the saved settings (run from ~/.xinitrc)
@@ -74,16 +75,49 @@ current() {
 	esac
 }
 
+# DPI as a Razer mouse reports it over hidraw (Razer's 90-byte feature report, get DPI = class 0x04,
+# id 0x85). Prints nothing for other mice or a sleeping wireless one. Opening /dev/hidraw* without
+# root needs /etc/udev/rules.d/70-dwm-mouse-dpi.rules.
+dpi() {
+	timeout 2 python3 -I - 2>/dev/null <<'EOF'
+import fcntl, glob, os, time
+def feature(n): return (3 << 30) | (91 << 16) | (ord('H') << 8) | n  # HIDIOCSFEATURE(6)/HIDIOCGFEATURE(7)
+for node in glob.glob('/sys/class/hidraw/hidraw*'):
+    if ':00001532:' not in open(node + '/device/uevent').read():
+        continue
+    try:
+        fd = os.open('/dev/' + os.path.basename(node), os.O_RDWR)
+    except OSError:
+        continue
+    for tid in (0x1f, 0x3f, 0xff):  # transaction id differs between Razer models
+        r = bytearray(91)  # report number 0, then the 90-byte report
+        r[2], r[6], r[7], r[8] = tid, 0x07, 0x04, 0x85
+        for b in r[3:89]:
+            r[89] ^= b
+        try:
+            fcntl.ioctl(fd, feature(6), bytes(r))
+            time.sleep(0.06)
+            fcntl.ioctl(fd, feature(7), r)
+        except OSError:
+            break  # not the control interface
+        if r[1] == 0x02 and r[7:9] == b'\x04\x85':  # status 2 = ok
+            x, y = r[10] << 8 | r[11], r[12] << 8 | r[13]
+            print(x if x == y else f'{x}x{y}')
+            raise SystemExit
+EOF
+}
+
 menu() {
-	local choice other s
+	local choice other s dpi
 	current
+	dpi="$(dpi)"
 	[ "$CUR_PROFILE" = flat ] && other=adaptive || other=flat
 	choice="$({
 		echo "profile: $other  (now $CUR_PROFILE)"
 		for s in -1.0 -0.9 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0; do
 			[ "$(awk -v s="$s" 'BEGIN { printf "%.2f", s }')" = "$CUR_SPEED" ] && echo "$s  (now)" || echo "$s"
 		done
-	} | "${DMENU[@]}" -p "Mouse speed $CUR_SPEED, or type one:")" || exit 0
+	} | "${DMENU[@]}" -p "Mouse speed $CUR_SPEED${dpi:+, $dpi DPI}, or type one:")" || exit 0
 	case "$choice" in
 	profile:*) set_profile "$other" ;;
 	*) set_speed "${choice%% *}" ;;
@@ -99,5 +133,5 @@ case "$1" in
 apply) apply ;;
 speed) set_speed "$2" && save && apply ;;
 profile) set_profile "$2" && save && apply ;;
-*) sed -n '3,9p' "$0" >&2; exit 2 ;;
+*) sed -n '3,10p' "$0" >&2; exit 2 ;;
 esac
