@@ -29,6 +29,11 @@ static const Rule rules[] = {
 	/* class      instance    title       tags mask     isfloating   monitor */
 	{ "Gimp",     NULL,       NULL,       0,            1,           -1 },
 	{ "Firefox",  NULL,       NULL,       1 << 8,       0,           -1 },
+	{ "Xdg-desktop-portal-gtk", NULL, NULL,   0,            1,           -1 },
+	{ NULL,       NULL,       "Enter name of file to save to…", 0, 1,       -1 },
+	{ NULL,       NULL,       "File Upload", 0,             1,           -1 },
+	{ NULL,       NULL,       "Save File",  0,              1,           -1 },
+	{ NULL,       NULL,       "Open File",  0,              1,           -1 },
 };
 
 /* layout(s) */
