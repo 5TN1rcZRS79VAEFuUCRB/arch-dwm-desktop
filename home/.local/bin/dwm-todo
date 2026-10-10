@@ -22,7 +22,7 @@ machine agrees. Canvas reports status itself (nothing due before the first sync 
 can't, so you mark those (and todo.txt tasks) done from the menu. Pushups are a task every day: the menu
 checks off each set and starts a 2-minute rest, and the last set scores it. A finished focus session is +2. Every 100 points is a level.
 The streak is days in a row with something turned in on time or a finished focus session; every 7 active
-days earn a streak freeze (up to 2), which a missed day uses up instead of ending the streak. Reminders go out 3 days, 1 day and 3 hours before a due date, plus a summary each morning.
+days earn a streak freeze (up to 2), which a missed day uses up instead of ending the streak. Reminders go out 3 days and 1 day before a due date, then every 30 minutes in the last 3 hours, plus a summary each morning.
 """
 import fcntl
 import glob
@@ -64,7 +64,8 @@ ANKI_EVERY = 5  # while Anki is open, its count refreshes this often
 FOCUS_SECS = 600
 REST_SECS = 300
 NEXT_WINDOW = 1800  # after a session or break, the menu offers 10 more minutes for this long
-REMIND = [3 * 86400, 86400, 3 * 3600]  # seconds before due, longest first
+NAG = 3 * 3600  # in the last 3 hours: a sticky reminder every 30 minutes
+REMIND = [3 * 86400, 86400] + list(range(NAG, 0, -1800))  # seconds before due, longest first
 PTS = {"done": 10, "late": 3, "missing": 0}  # no penalty: punishment teaches avoiding the tracker
 EARLY, EARLY_BONUS = 86400, 5  # turned in this long before it's due: bonus points
 SURPRISE = 0.25  # chance a completion pays double, fixed per task so every machine agrees
@@ -509,9 +510,12 @@ def todo(tasks, s, now):
     return items
 
 
-def left(secs):
-    s = abs(secs)
-    txt = f"{s // 86400:.0f}d" if s >= 86400 else f"{s // 3600:.0f}h" if s >= 3600 else f"{s // 60:.0f}m"
+def left(secs, units=2):
+    """Rounded down (never more time than there is): 1d 23h, 3h 5m, 45m; units=1 gives 1d, 3h (the menu)."""
+    m = int(abs(secs)) // 60
+    d, h, m = m // 1440, m // 60 % 24, m % 60
+    big, small = ((d, "d"), (h, "h")) if d else ((h, "h"), (m, "m")) if h else ((m, "m"), (0, ""))
+    txt = f"{big[0]}{big[1]}" + (f" {small[0]}{small[1]}" if small[0] and units > 1 else "")
     return f"{txt} late" if secs < 0 else txt
 
 
@@ -568,13 +572,13 @@ def close_sticky():
 
 
 def remind(s, items, now):
-    ids = {t["id"] for t in items}
-    s["reminded"] = [k for k in s["reminded"] if k.rsplit("@", 1)[0] in ids]
+    # Never pruned: each machine's task list differs, and pruning to this one's let the machines erase each
+    # other's keys through Syncthing every minute, re-sending the same reminder. A few keys per task is tiny.
     for t in items:
         keys = [f"{t['id']}@{secs}" for secs in REMIND if 0 < t["due"] - now <= secs]
         # One notification per threshold, even when the first sync crosses several at once.
         if keys and keys[-1] not in s["reminded"]:
-            notify(f"Due in {left(t['due'] - now)}: {t['title']}", t["course"], urgent=t["due"] - now <= REMIND[-1])
+            notify(f"Due in {left(t['due'] - now)}: {t['title']}", t["course"], urgent=t["due"] - now <= NAG)
             s["reminded"] += [k for k in keys if k not in s["reminded"]]
 
 
@@ -590,7 +594,7 @@ def summary(s, items, now):
     end_today = datetime.now().replace(hour=23, minute=59, second=59).timestamp()
     week = [t for t in items if now <= t["due"] <= now + 7 * 86400]
     n_today = sum(t["due"] <= end_today for t in week)
-    body = "\n".join(f"{left(t['due'] - now):>4}  {t['title']}" for t in week[:6]) or "Nothing due this week."
+    body = "\n".join(f"{left(t['due'] - now):>6}  {t['title']}" for t in week[:6]) or "Nothing due this week."
     yesterday = (date.today() - timedelta(days=1)).isoformat()
     if yesterday not in s.get("days", []) and streak(s) > 0:
         body = "A streak freeze saved your streak yesterday.\n" + body
@@ -790,7 +794,7 @@ def run_menu():
         rows.append(("Stop timer", ("stop", None)))
     elif first and not again:
         rows.append((f">> Start 10-min focus: {first['title']}", ("focus", first)))
-    rows += [(f"{left(t['due'] - now):>8}  {t['course'] + ': ' if t['course'] else ''}{t['title']}", ("task", t))
+    rows += [(f"{left(t['due'] - now, 1):>8}  {t['course'] + ': ' if t['course'] else ''}{t['title']}", ("task", t))
              for t in items]
     rows.append(("Sync now", ("sync", None)))
     act, t = dmenu(rows, prompt) or (None, None)
@@ -916,11 +920,24 @@ def selftest():
         assert mem["scores"]["early-task"]["pts"] == (10 + EARLY_BONUS) * (2 if doubled else 1)
         award(mem, {"id": "m2", "title": "x", "due": time.time() - 9}, "missing")
         assert mem["scores"]["m2"]["pts"] == 0
+        sent = []
+        notify = lambda *a, **k: sent.append(a)
+        mem["reminded"] = []
+        soon = [dict(t("soon", "canvas", 20), title="x", course="y")]
+        remind(mem, soon, now)
+        remind(mem, [], now)  # another machine without the task must not erase its keys
+        remind(mem, soon, now)
+        assert len(sent) == 1, sent
+        for h in (2.9, 2.6, 2.4, 0.2):  # last 3 hours: every 30 minutes, not every minute
+            remind(mem, soon, soon[0]["due"] - h * 3600)
+        assert len(sent) == 4, sent
     finally:
         notify = real_notify
     hits = sum(random.Random(f"t{i}").random() < SURPRISE for i in range(1000))
     assert 200 < hits < 300  # about 1 in 4
-    assert (left(-90000), left(7200), left(59)) == ("1d late", "2h", "0m")
+    assert (left(-90000), left(7200), left(59)) == ("1d 1h late", "2h", "0m")
+    assert (left(171000), left(11100), left(2700)) == ("1d 23h", "3h 5m", "45m")
+    assert (left(171000, 1), left(-90000, 1)) == ("1d", "1d late")
     assert break_until([t("x", "canvas", 100)], now) == now + 28 * 3600  # free until 3 days before it's due
     assert break_until([t("x", "canvas", 71)], now) is None  # due within 3 days: no break
     assert break_until([t("x", "canvas", -1, "missing"), t("y", "canvas", 100)], now) is None  # late work: no break
