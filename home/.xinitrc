@@ -3,8 +3,19 @@ xrdb -merge ~/.Xresources
 # Make sure ~/.local/bin (my launcher wrappers, e.g. keepassxc) comes before /usr/bin.
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac
 
-# Optional and machine specific: set your monitor's refresh rate (output names are in `xrandr`).
-# xrandr --output DP-0 --mode 3840x2160 --rate 240
+# Every monitor at the fastest refresh rate of its native (first listed) resolution. X otherwise
+# uses the monitor's "preferred" mode, which is often 60 Hz even on a 240 Hz panel, and fullscreen
+# games then only offer 60 Hz.
+xrandr | awk '/ connected/ { out = $1; getline; max = 0
+	for (i = 2; i <= NF; i++) if ($i + 0 > max) max = $i + 0
+	print out, $1, max }' |
+while read -r out res rate; do xrandr --output "$out" --mode "$res" --rate "$rate"; done
+
+# G-SYNC on NVIDIA. The driver lists this monitor as "G-SYNC Compatible (unvalidated)" and leaves
+# VRR off for those unless the metamode asks for it. Fullscreen games then sync to the frame rate.
+command -v nvidia-settings >/dev/null &&
+	nvidia-settings --assign CurrentMetaMode="$(nvidia-settings -q CurrentMetaMode -t |
+		sed 's/.*:: //; s/{/{AllowGSYNCCompatible=On, /g')" >/dev/null
 
 # Idle screen-off WITHOUT DPMS. Cutting the video signal (DPMS) can leave some monitors unable to bring
 # the picture back on NVIDIA + DisplayPort with a compressed 4K 240 Hz mode (a long sleep, then "monitor

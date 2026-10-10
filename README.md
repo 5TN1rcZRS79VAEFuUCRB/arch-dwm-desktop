@@ -212,8 +212,6 @@ screen saver are honoured, because `dwm-blank` follows the X server's own saver 
   (for example `sudo pacman -S nvidia-open`). The bar shows GPU load and temperature by itself once
   `nvidia-smi` works (it uses one long-running `nvidia-smi`, not a new one every second).
 * **GPU/RGB lighting control** (hardware specific).
-* **Monitor refresh rate and G-SYNC.** These depend on the monitor and output name, so `.xinitrc`
-  only has a commented-out `xrandr` example to edit.
 * **All server software** (Jellyfin, Radarr/Sonarr, Docker, Cloudflare and so on) and any
   passwords or API keys, including the Canvas token and Schoology feed link for `dwm-todo`.
 
