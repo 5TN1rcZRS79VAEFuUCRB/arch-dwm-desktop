@@ -194,12 +194,14 @@ fi
 # The MX920's driverless (IPP Everywhere) setup fails: its firmware leaves out the attributes CUPS
 # needs ("PPD creation failed"), so the queue uses Gutenprint's driver instead. The printer is reached
 # by its mDNS name, so a new IP from the router does not break it. Added only if the queue is missing.
+# The queue takes the name CUPS gives the discovered printer, which hides that broken driverless
+# entry from print dialogs (Firefox had remembered it, so its jobs went nowhere).
 say "Printing: CUPS and the Canon MX920"
 if command -v lpadmin >/dev/null; then
 	sudo systemctl enable --now cups || warn "could not start CUPS; run: sudo systemctl enable --now cups"
-	if ! lpstat -p MX920 >/dev/null 2>&1; then
-		sudo lpadmin -p MX920 -E -v ipp://488E78000000.local/ipp/print -m gutenprint.5.3://bjc-MX920-series/expert \
-			&& lpoptions -d MX920 >/dev/null \
+	if ! lpstat -p Canon_MX920_series >/dev/null 2>&1; then
+		sudo lpadmin -p Canon_MX920_series -E -v ipp://488E78000000.local/ipp/print -m gutenprint.5.3://bjc-MX920-series/expert \
+			&& lpoptions -d Canon_MX920_series >/dev/null \
 			|| warn "could not add the MX920 printer; run the lpadmin line above by hand to see why"
 	fi
 else
