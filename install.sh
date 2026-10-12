@@ -190,6 +190,22 @@ else
 	warn "nss-mdns is not installed; skipping .local hostnames"
 fi
 
+# ---------------------------------------------------------------- printing (Canon MX920)
+# The MX920's driverless (IPP Everywhere) setup fails: its firmware leaves out the attributes CUPS
+# needs ("PPD creation failed"), so the queue uses Gutenprint's driver instead. The printer is reached
+# by its mDNS name, so a new IP from the router does not break it. Added only if the queue is missing.
+say "Printing: CUPS and the Canon MX920"
+if command -v lpadmin >/dev/null; then
+	sudo systemctl enable --now cups || warn "could not start CUPS; run: sudo systemctl enable --now cups"
+	if ! lpstat -p MX920 >/dev/null 2>&1; then
+		sudo lpadmin -p MX920 -E -v ipp://488E78000000.local/ipp/print -m gutenprint.5.3://bjc-MX920-series/expert \
+			&& lpoptions -d MX920 >/dev/null \
+			|| warn "could not add the MX920 printer; run the lpadmin line above by hand to see why"
+	fi
+else
+	warn "cups is not installed; skipping the printer"
+fi
+
 # ---------------------------------------------------------------- Syncthing (KeePassXC sync)
 # Only the service is set up here. Device keys and the folder/device pairing live in
 # ~/.local/state/syncthing and are never in this repo; pair devices at http://127.0.0.1:8384.

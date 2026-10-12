@@ -48,6 +48,7 @@ of X and run `startx` again.
 | Xorg: touchpad tap-to-click (one finger left, two right, three middle); on AMD GPUs only, AMD's driver (`xf86-video-amdgpu`) with TearFree | `/etc/X11/xorg.conf.d/` (needs sudo) |
 | Mouse speed / acceleration profile re-applied when a mouse is plugged in (a udev rule starting `dwm-mouse.service`), and a udev rule letting `dwm-mouse` read a Razer mouse's DPI | `/etc/udev/rules.d/`, `~/.config/systemd/user/` |
 | `.local` hostnames over mDNS (`ssh user@machine.local`): Avahi enabled, `mdns_minimal` added to the `hosts:` line | `/etc/nsswitch.conf` (needs sudo) |
+| Printing: CUPS with the Canon MX920 as the default printer (Gutenprint driver; the printer's own driverless mode fails), reached as `488E78000000.local` | CUPS, `systemctl enable cups` (needs sudo) |
 | Syncthing (keeps the KeePassXC database in sync), started now and at every login | `systemctl --user enable syncthing`. Pair devices and share the folder yourself at http://127.0.0.1:8384; keys are never in this repo |
 | Desktop-wide "prefer dark" | dconf (`org.gnome.desktop.interface`) |
 | git commit name and email (GitHub noreply address) | `~/.gitconfig` (only `user.name` and `user.email`) |

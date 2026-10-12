@@ -42,6 +42,10 @@ tailscale
 avahi
 nss-mdns
 
+# --- printing: CUPS + Gutenprint (the Canon MX920 needs a driver; its driverless/AirPrint setup fails)
+cups
+gutenprint
+
 # --- screenshots (dwm-shot: Print / Shift+Print)
 maim
 xclip
