@@ -24,6 +24,7 @@ pipewire-pulse
 pipewire-alsa
 wireplumber
 libpulse
+rtkit
 alsa-utils       # runs the UCM boot sequence at startup; without it the laptop mic-mute LED never follows mute
 
 # --- laptop backlight (Fn brightness keys, bound in dwm's config.h)
@@ -34,6 +35,7 @@ libxss
 
 # --- network picker (dwm-net, Mod+N); the laptop's battery and power profile need no package here
 networkmanager
+wireless-regdb
 
 # --- Tailscale: ssh arch-server from anywhere, without a browser login ---
 tailscale
