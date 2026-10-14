@@ -544,11 +544,13 @@ def bar_text(tasks, errors, s, now):
     return " | ".join(parts)
 
 
-def notify(title, body="", urgent=False):
-    """Urgent ones stay until clicked (dunstrc) or until Mod+a opens the menu (close_sticky)."""
+def notify(title, body="", urgent=False, tag=None):
+    """Urgent ones stay until clicked (dunstrc) or until Mod+a opens the menu (close_sticky).
+    A tag replaces the shown notification with the same tag instead of stacking under it."""
+    hint = ["-h", f"string:x-dunst-stack-tag:{tag}"] if tag else []
     try:
         p = subprocess.run(["notify-send", "-p", "-a", "dwm-todo", "-u", "critical" if urgent else "normal",
-                            title, body], capture_output=True, text=True, timeout=10)
+                            *hint, title, body], capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.TimeoutExpired):
         return
     if urgent and p.stdout.strip().isdigit():
@@ -578,7 +580,8 @@ def remind(s, items, now):
         keys = [f"{t['id']}@{secs}" for secs in REMIND if 0 < t["due"] - now <= secs]
         # One notification per threshold, even when the first sync crosses several at once.
         if keys and keys[-1] not in s["reminded"]:
-            notify(f"Due in {left(t['due'] - now)}: {t['title']}", t["course"], urgent=t["due"] - now <= NAG)
+            notify(f"Due in {left(t['due'] - now)}: {t['title']}", t["course"], urgent=t["due"] - now <= NAG,
+                   tag=t["id"])
             s["reminded"] += [k for k in keys if k not in s["reminded"]]
 
 
