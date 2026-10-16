@@ -78,6 +78,8 @@ keepassxc
 syncthing        # keeps the KeePassXC database in sync between machines
 anki             # flashcards; dwm-todo shows today's due cards (its add-on is in home/.local/share/Anki2)
 mpv              # plays the audio and video on Anki cards
+proton-vpn-gtk-app
+gnome-keyring    # Secret Service (D-Bus activated) where Proton VPN keeps its login
 
 # --- Claude Code add-ons: the caveman proxy CLI is an npm package ---
 npm
