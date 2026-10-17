@@ -5,4 +5,6 @@ After=network-online.target
 
 [Service]
 Type=oneshot
+# The user manager's PATH lacks ~/.local/bin, so install.sh would not find claude and skip its add-ons.
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin
 ExecStart=%h/.local/bin/dwm-update
