@@ -32,7 +32,7 @@
     foreground = "#bbbbbb"
     timeout = 5
 
-# 3-hour deadline warnings and finished focus timers: stay until clicked.
+# Finished focus timers, level-ups and token warnings: stay until clicked.
 [urgency_critical]
     background = "#222222"
     foreground = "#eeeeee"

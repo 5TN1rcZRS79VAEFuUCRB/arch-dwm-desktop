@@ -64,7 +64,7 @@ ANKI_EVERY = 5  # while Anki is open, its count refreshes this often
 FOCUS_SECS = 600
 REST_SECS = 300
 NEXT_WINDOW = 1800  # after a session or break, the menu offers 10 more minutes for this long
-NAG = 3 * 3600  # in the last 3 hours: a sticky reminder every 30 minutes
+NAG = 3 * 3600  # in the last 3 hours: a reminder every 30 minutes
 REMIND = [3 * 86400, 86400] + list(range(NAG, 0, -1800))  # seconds before due, longest first
 PTS = {"done": 10, "late": 3, "missing": 0}  # no penalty: punishment teaches avoiding the tracker
 EARLY, EARLY_BONUS = 86400, 5  # turned in this long before it's due: bonus points
@@ -583,8 +583,7 @@ def remind(s, items, now):
         keys = [f"{t['id']}@{secs}" for secs in REMIND if 0 < t["due"] - now <= secs]
         # One notification per threshold, even when the first sync crosses several at once.
         if keys and keys[-1] not in s["reminded"]:
-            notify(f"Due in {left(t['due'] - now)}: {t['title']}", t["course"], urgent=t["due"] - now <= NAG,
-                   tag=t["id"])
+            notify(f"Due in {left(t['due'] - now)}: {t['title']}", t["course"], tag=t["id"])
             s["reminded"] += [k for k in keys if k not in s["reminded"]]
 
 
