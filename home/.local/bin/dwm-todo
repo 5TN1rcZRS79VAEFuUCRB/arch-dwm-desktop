@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-dwm-todo: Canvas + Schoology assignments, your own to-dos and daily pushups in the dwm bar, with points,
+dwm-todo: Canvas + Schoology assignments, your own to-dos and workouts in the dwm bar, with points,
 a streak and reminders.
 
   dwm-todo daemon    sync every 5 min, refresh the bar and send reminders every minute (~/.xinitrc)
@@ -19,8 +19,8 @@ Setup, in ~/.local/share/dwm-todo/ (share that folder with Syncthing to keep mac
 Points: on time +10, late +3, missing 0 (no penalties: they teach avoiding the tracker); +5 more for
 turning work in 24 hours or more early; about 1 in 4 completions pays double, decided per task so every
 machine agrees. Canvas reports status itself (nothing due before the first sync counts); Schoology's feed
-can't, so you mark those (and todo.txt tasks) done from the menu. Pushups are a task every day: the menu
-checks off each set and starts a 2-minute rest, and the last set scores it. A finished focus session is +2. Every 100 points is a level.
+can't, so you mark those (and todo.txt tasks) done from the menu. A workout is a task every Sunday, Monday,
+Wednesday and Friday, checked off from the menu that day only. A finished focus session is +2. Every 100 points is a level.
 The streak is days in a row with something turned in on time or a finished focus session; every 7 active
 days earn a streak freeze (up to 2), which a missed day uses up instead of ending the streak. Reminders go out 3 days and 1 day before a due date, then every 30 minutes in the last 3 hours, plus a summary each morning.
 """
@@ -74,11 +74,11 @@ FREEZE_EVERY, MAX_FREEZES = 7, 2  # active days that earn a streak freeze, and h
 # Bar icons (Symbols Nerd Font): graduation cap, warning, coffee, star, flame
 TIMER = "󰔛"
 CAP, WARN, COFFEE, STAR, FIRE = "", "", "󰅶", "", "󰈸"
-PRIORITY = {"canvas": 1, "schoology": 2, "todo": 2, "anki": 3, "pushups": 4}  # breaks ties on the same day
-MANUAL = ("schoology", "todo", "pushups")  # nothing reports these done: they're checked off from the menu
+PRIORITY = {"canvas": 1, "schoology": 2, "todo": 2, "anki": 3, "workout": 4}  # breaks ties on the same day
+MANUAL = ("schoology", "todo", "workout")  # nothing reports these done: they're checked off from the menu
 LATE_FIRST = 2 * 86400  # nothing due within this long: late work moves to the top
 MANUAL_LATE = 7 * 86400  # late manual work stays listed this long (nothing can say it was turned in)
-SETS, SET_REST = 3, 120  # daily pushups: sets to failure, and the rest after each one
+WORKOUT_DAYS = (6, 0, 2, 4)  # date.weekday(): Sunday, Monday, Wednesday, Friday
 BREAK = 3 * 86400  # nothing late and nothing due within this long: a break (ends when the 3-day reminder fires)
 
 
@@ -130,7 +130,7 @@ def state():
 def migrate(s):
     """Fill in defaults. focus_pts (a running total) became focus (one entry per finished session),
     which two machines can merge; the old total turns into numbered entries, the same on every machine."""
-    for k, v in {"scores": {}, "hidden": [], "reminded": [], "focus": [], "days": [], "sets": []}.items():
+    for k, v in {"scores": {}, "hidden": [], "reminded": [], "focus": [], "days": []}.items():
         s.setdefault(k, v)
     legacy = [f"legacy-{i}" for i in range(1, s.pop("focus_pts", 0) // 2 + 1)]
     for v in s["scores"].values():  # missing work used to cost 5 points; it costs nothing now
@@ -144,7 +144,7 @@ def merge(s, other):
     other = migrate(other)
     for k, v in other["scores"].items():
         s["scores"].setdefault(k, v)
-    for key in ("hidden", "reminded", "focus", "days", "sets"):
+    for key in ("hidden", "reminded", "focus", "days"):
         s[key] += [x for x in other[key] if x not in s[key]]
     s["days"].sort()
     for key in ("summary_day", "anki_day", "token_warned"):  # ISO dates: the later one
@@ -276,9 +276,11 @@ def todo_tasks():
         return []
 
 
-def pushups_task():
-    """Only ever today's: pushups can't be done ahead for another day, and a missed day just goes away."""
-    return {"id": f"pushups:{date.today().isoformat()}", "source": "pushups", "title": f"Pushups: {SETS} sets to failure",
+def workout_task():
+    """Only ever today's, on a workout day: it can't be done ahead for another day, and a missed day just goes away."""
+    if date.today().weekday() not in WORKOUT_DAYS:
+        return None
+    return {"id": f"workout:{date.today().isoformat()}", "source": "workout", "title": "Workout",
             "course": "", "due": tonight(), "status": "todo", "url": ""}
 
 
@@ -334,7 +336,8 @@ def sync():
     except ValueError as e:  # a bad date in todo.txt
         errors.append(f"todo.txt: {e}")
         tasks += [t for t in old if t["source"] == "todo"]
-    tasks.append(pushups_task())
+    if workout := workout_task():
+        tasks.append(workout)
     with state() as s:
         s.setdefault("since", time.time())
         for t in tasks:
@@ -496,11 +499,11 @@ def mark_done(t, on_time=None):
 
 def todo(tasks, s, now):
     """Unfinished work (the bar shows only the first, never a count of late work): upcoming first, by day, then
-    PRIORITY (Canvas, Schoology, Anki, pushups) on the same day; then overdue,
+    PRIORITY (Canvas, Schoology, Anki, workout) on the same day; then overdue,
     most recent first (likeliest to still be accepted). With nothing due soon, overdue goes first."""
     keep = [t for t in tasks if t["id"] not in s["hidden"] and (
         t["status"] in ("todo", "missing") if t["source"] not in MANUAL
-        else t["id"] not in s["scores"] and t["due"] > now - (0 if t["source"] == "pushups" else MANUAL_LATE))]
+        else t["id"] not in s["scores"] and t["due"] > now - (0 if t["source"] == "workout" else MANUAL_LATE))]
     day = lambda t: time.strftime("%Y%m%d", time.localtime(t["due"]))
     items = sorted(keep, key=lambda t: (False, day(t), PRIORITY[t["source"]], t["due"]) if t["due"] >= now
                    else (True, -t["due"]))
@@ -727,21 +730,14 @@ def rest(t):
         notify(f"Break's over: {t['title']}", "Mod+a: 10 more minutes", urgent=True)
 
 
-def sets_today(s):
-    return sum(x.startswith(date.today().isoformat()) for x in s["sets"])
-
-
-def pushup_set():
-    """One set to failure done: the last one scores today's pushups, the others start the rest timer.
-    Always today's task, never the one the menu listed: after midnight, yesterday's can't be finished late."""
-    t = pushups_task()
-    with state() as s:
-        n = sets_today(s) + 1
-        s["sets"].append(f"{date.today().isoformat()} {n} {os.uname().nodename}")
-        if n >= SETS:
-            award(s, t, "done")
-    if n < SETS and timer(SET_REST, COFFEE, f"rest, then set {n + 1}"):
-        notify(f"Rest's over: set {n + 1} of {SETS}", "To failure. Mod+a when it's done.", urgent=True)
+def workout_done(listed):
+    """Scores today's workout, and only if that's the one the menu listed: after midnight, yesterday's
+    can't be finished late, nor today's checked off from a stale menu."""
+    t = workout_task()
+    if t and t["id"] == listed["id"]:
+        with state() as s:
+            if t["id"] not in s["scores"]:
+                award(s, t, "done")
 
 
 def next_session(tasks, s, now):
@@ -785,9 +781,8 @@ def run_menu():
         prompt = f"{total(s)} pts · Lv {lvl} ({to_next} to go) · {run}-day streak" + (f" · {freezes} freeze" if freezes else "")
         since = s.get("since", now)
         again = next_session(tasks, s, now)
-        sets = sets_today(s)
     rows = []
-    first = next((t for t in items if t["source"] != "pushups"), None)  # pushups get no focus timer
+    first = next((t for t in items if t["source"] != "workout"), None)  # workouts get no focus timer
     if again and not focus_end():
         rows += [(f"10 more minutes: {again['title']}", ("more", again)), ("5-minute break", ("rest", again)),
                  ("Stop for now (not finished)", ("pause", again))]
@@ -803,9 +798,8 @@ def run_menu():
     act, t = dmenu(rows, prompt) or (None, None)
     if act == "task":
         sub = [("Start 10-min focus", ("focus", t))]
-        if t["source"] == "pushups":
-            rest_note = f": {SET_REST // 60}-min rest" if sets + 1 < SETS else ""
-            sub = [(f"Set {sets + 1} of {SETS} done{rest_note}", ("set", t))]
+        if t["source"] == "workout":
+            sub = [("Finished", ("workout", t))]
         elif t["source"] == "anki" or t["url"]:
             sub.append(("Open Anki" if t["source"] == "anki" else "Open in browser", ("open", t)))
         if t["source"] in ("schoology", "todo") and t["due"] < now:  # past due: it may have gone in on time anyway
@@ -832,8 +826,8 @@ def run_menu():
         finish()
     elif act == "stop":
         os.remove(FOCUS)
-    elif act == "set":
-        pushup_set()
+    elif act == "workout":
+        workout_done(t)
     elif act == "open":
         open_url(t)
     elif act == "sync":
@@ -847,7 +841,7 @@ def run_menu():
     elif act == "hide":
         with state() as s:
             s["hidden"].append(t["id"])
-    if act in ("sync", "done", "done_on_time", "done_late", "hide", "set"):
+    if act in ("sync", "done", "done_on_time", "done_late", "hide", "workout"):
         tick()
 
 
@@ -868,8 +862,8 @@ def selftest():
              t("c_tomorrow", "canvas", 24), t("c_done", "canvas", 3, "done"), t("s_hidden", "schoology", 1)]
     s = {"scores": {}, "hidden": ["s_hidden"], "focus": ["f1"]}
     assert [x["id"] for x in todo(tasks, s, now)] == ["c_today", "s_today", "c_tomorrow", "late"]
-    same_day = [t("p", "pushups", 1), t("a", "anki", 11), t("s", "schoology", 1), t("c", "canvas", 6)]
-    assert [x["id"] for x in todo(same_day, s, now)] == ["c", "s", "a", "p"]  # same day: Canvas, Schoology, Anki, pushups
+    same_day = [t("w", "workout", 1), t("a", "anki", 11), t("s", "schoology", 1), t("c", "canvas", 6)]
+    assert [x["id"] for x in todo(same_day, s, now)] == ["c", "s", "a", "w"]  # same day: Canvas, Schoology, Anki, workout
     old = [t("s_6d", "schoology", -6 * 24), t("s_8d", "schoology", -8 * 24)]
     assert [x["id"] for x in todo(old, s, now)] == ["s_6d"]  # late Schoology work stays a week
     global state, notify
@@ -885,8 +879,8 @@ def selftest():
     mine = parse_todo("# note\n2026-10-13 20:00 Poster board\n2026-10-14 Essay\nnot a task\n")
     assert [(x["title"], x["due"]) for x in mine] == [("Poster board", datetime(2026, 10, 13, 20, 0).timestamp()),
                                                      ("Essay", datetime(2026, 10, 14, 23, 59).timestamp())], mine
-    manual = [t("todo1", "todo", 30), t("push", "pushups", 11), t("push_done", "pushups", 11), t("push_old", "pushups", -1)]
-    assert [x["id"] for x in todo(manual, dict(s, scores={"push_done": {}}), now)] == ["push", "todo1"]
+    manual = [t("todo1", "todo", 30), t("gym", "workout", 11), t("gym_done", "workout", 11), t("gym_old", "workout", -1)]
+    assert [x["id"] for x in todo(manual, dict(s, scores={"gym_done": {}}), now)] == ["gym", "todo1"]
     gap = [t("late_old", "canvas", -50, "missing"), t("late_new", "canvas", -5, "missing"), t("far", "canvas", 72)]
     assert [x["id"] for x in todo(gap, s, now)] == ["late_new", "late_old", "far"]  # nothing due in 2 days
     gap[2]["due"] = now + 30 * 3600

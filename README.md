@@ -134,7 +134,7 @@ switch by choosing one.
 
 ## School assignments and to-dos
 
-`dwm-todo` puts the next Canvas or Schoology assignment, `todo.txt` task or today's pushups at the left of the status text (title and
+`dwm-todo` puts the next Canvas or Schoology assignment, `todo.txt` task or today's workout at the left of the status text (title and
 time left, points and a streak of days in a row with something turned in on time or a finished focus
 session, where every 7 active days earn a streak freeze that saves a missed day; never a count of late work) and sends reminders 3 days, 1 day and 3 hours before
 each due date, plus a summary every morning. `Mod+A` opens a dmenu list: start a 10-minute focus session
@@ -144,8 +144,8 @@ type; **Finished it** ends a session early and checks the task off), open an ass
 or mark Schoology work done.
 
 Your own tasks go in `~/.local/share/dwm-todo/todo.txt`, one per line (`2026-10-13 21:00 Poster board`; with
-no time, due at 11:59 pm) and are marked done from the menu like Schoology work. Pushups are a task every
-day: picking them checks off a set to failure and starts a 2-minute rest in the bar, and the third set scores them.
+no time, due at 11:59 pm) and are marked done from the menu like Schoology work. A workout is a task every
+Sunday, Monday, Wednesday and Friday: pick it and **Finished** to score it. It can only be checked off that day: not ahead, not late.
 
 Points: on time +10, late +3, missing 0 (no penalties); +5 more for turning work in 24 hours or more early;
 about 1 in 4 completions pays double (decided per task, so every machine agrees); every 100 points is a level.
