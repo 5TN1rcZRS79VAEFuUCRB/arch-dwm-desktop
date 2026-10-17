@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#
+# dwm-update: pulls this repo and re-runs install.sh when a new commit is pushed, then asks for X to
+# restart. Run every 5 minutes by dwm-update.timer. install.sh records the commit it installed, so a
+# failed install (pacman lock, no network) is retried on the next run instead of being skipped.
+# The restart waits until you are idle: dwm-blank does it once the screen saver is on.
+
+set -euo pipefail
+trap 'notify-send -u critical "dwm-update failed" "journalctl --user -u dwm-update" 2>/dev/null || true' ERR
+
+cd "$HOME/.local/share/arch-dwm-desktop"   # symlink to the clone, made by install.sh
+git pull --ff-only -q                       # refuses (and notifies) if this clone has diverged
+[ "$(git rev-parse HEAD)" = "$(cat "$HOME/.local/state/arch-dwm-desktop-installed" 2>/dev/null)" ] && exit 0
+
+./install.sh
+touch "$XDG_RUNTIME_DIR/dwm-restart-x"

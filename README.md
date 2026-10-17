@@ -50,6 +50,7 @@ of X and run `startx` again.
 | `.local` hostnames over mDNS (`ssh user@machine.local`): Avahi enabled, `mdns_minimal` added to the `hosts:` line | `/etc/nsswitch.conf` (needs sudo) |
 | Printing: CUPS with the Canon MX920 as the default printer (Gutenprint driver; the printer's own driverless mode fails), reached as `488E78000000.local` | CUPS, `systemctl enable cups` (needs sudo) |
 | Syncthing (keeps the KeePassXC database in sync), started now and at every login | `systemctl --user enable syncthing`. Pair devices and share the folder yourself at http://127.0.0.1:8384; keys are never in this repo |
+| Auto-update: every 5 minutes `dwm-update.timer` pulls this clone and, on a new commit, re-runs `install.sh` and restarts X once you are idle (screen saver on, 10 minutes without input). Failures show a notification (`journalctl --user -u dwm-update`). Needs passwordless sudo, which the installer sets up: anything running as you, and anyone who can push here, gets root | `~/.local/share/arch-dwm-desktop` (link to the clone), `/etc/sudoers.d/10-dwm-update` (undo: delete it and `systemctl --user disable --now dwm-update.timer`) |
 | Desktop-wide "prefer dark" | dconf (`org.gnome.desktop.interface`) |
 | git commit name and email (GitHub noreply address) | `~/.gitconfig` (only `user.name` and `user.email`) |
 | Tailscale, and `ssh arch-server` over it (no browser login; run `sudo tailscale up` once per machine) | `~/.ssh/config.d/`, `~/.ssh/known_hosts.d/`, plus an `Include` line at the top of your own `~/.ssh/config` |

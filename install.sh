@@ -75,6 +75,19 @@ sudo_place() { # src dest
 	echo "Installed $2"
 }
 
+# ---------------------------------------------------------------- passwordless sudo
+# dwm-update re-runs this installer unattended when a commit is pushed, so its sudo calls cannot
+# ask for a password. This makes the user root-equivalent without one: anything running as this
+# user, and anyone who can push to the repo, gets root. Undo: sudo rm /etc/sudoers.d/10-dwm-update
+SUDOERS=/etc/sudoers.d/10-dwm-update
+if ! sudo test -e "$SUDOERS"; then
+	say "Passwordless sudo for $(id -un) (lets dwm-update run this installer unattended)"
+	tmp="$(mktemp)"
+	echo "$(id -un) ALL=(ALL) NOPASSWD: ALL" > "$tmp"
+	sudo visudo -cqf "$tmp" && sudo install -m440 "$tmp" "$SUDOERS"
+	rm -f "$tmp"
+fi
+
 # ---------------------------------------------------------------- packages
 if [ "$DO_PACKAGES" -eq 1 ]; then
 	say "Installing packages (sudo password may be requested)"
@@ -231,6 +244,13 @@ else
 	warn "syncthing is not installed; skipping"
 fi
 
+# ---------------------------------------------------------------- auto-update
+# dwm-update.timer pulls this clone every 5 minutes and re-runs this installer on new commits.
+say "Auto-update: pull and reinstall on new commits"
+ln -sfn "$PWD" "$HOME/.local/share/arch-dwm-desktop"
+systemctl --user enable --now dwm-update.timer \
+	|| warn "could not start the auto-update timer; after logging in run: systemctl --user enable --now dwm-update.timer"
+
 # ---------------------------------------------------------------- git identity
 # GitHub noreply address, so commits work and push without exposing an email.
 say "git: commit name and email"
@@ -307,6 +327,9 @@ fi
 
 # ---------------------------------------------------------------- done
 say "Done"
+# dwm-update compares this with the pulled commit to know whether to install again.
+mkdir -p "$HOME/.local/state"
+git rev-parse HEAD > "$HOME/.local/state/arch-dwm-desktop-installed"
 # Hand edits to these files are gone from the live copies; copy back into the repo any worth keeping.
 if [ ${#REPLACED[@]} -gt 0 ]; then
 	warn "these files differed from the repo and were replaced (old copies in $BACKUP):"

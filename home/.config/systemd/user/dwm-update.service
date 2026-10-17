@@ -1,0 +1,8 @@
+# Started by dwm-update.timer: applies newly pushed commits of this repo.
+[Unit]
+Description=Pull arch-dwm-desktop and re-run install.sh on new commits
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/dwm-update
