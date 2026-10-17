@@ -92,7 +92,11 @@ fi
 if [ "$DO_PACKAGES" -eq 1 ]; then
 	say "Installing packages (sudo password may be requested)"
 	mapfile -t PKGS < <(sed -e 's/#.*//' -e 's/[[:space:]]*$//' packages.txt | grep -v '^$')
-	sudo pacman -S --needed --noconfirm "${PKGS[@]}"
+	# Only packages not installed yet. Naming an installed one to `pacman -S` upgrades it alone (a
+	# partial upgrade), and --noconfirm even overrides IgnorePkg: that pulled a pinned xorg-server
+	# forward and Xorg then crashed in the amdgpu driver. Upgrades stay with pacman -Syu.
+	mapfile -t MISSING < <(pacman -T "${PKGS[@]}" || true)
+	[ ${#MISSING[@]} -eq 0 ] || sudo pacman -S --noconfirm "${MISSING[@]}"
 fi
 
 # ---------------------------------------------------------------- display scaling
@@ -168,8 +172,8 @@ HAS_AMDGPU=0
 for d in /sys/class/drm/card[0-9]*/device/driver; do
 	[ "$(basename "$(readlink -f "$d")")" = amdgpu ] && HAS_AMDGPU=1
 done
-if [ "$HAS_AMDGPU" -eq 1 ] && [ "$DO_PACKAGES" -eq 1 ]; then
-	sudo pacman -S --needed --noconfirm xf86-video-amdgpu
+if [ "$HAS_AMDGPU" -eq 1 ] && [ "$DO_PACKAGES" -eq 1 ] && ! pacman -T xf86-video-amdgpu >/dev/null; then
+	sudo pacman -S --noconfirm xf86-video-amdgpu   # only when missing, as for packages.txt
 fi
 for f in etc/X11/xorg.conf.d/*.conf; do
 	dest="/$f"
